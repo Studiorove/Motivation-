@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Push. Don't Cave.</title>
+<meta name="theme-color" content="#0f0f14">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+
+    <header class="topbar">
+      <div class="brand">PUSH<span>.</span></div>
+      <button id="editGoalBtn" class="icon-btn" title="Edit your why">✎</button>
+    </header>
+
+    <section class="why-card" id="whyCard">
+      <p class="why-label">Your why</p>
+      <h1 id="whyText">Tap the pencil to set your reason.</h1>
+    </section>
+
+    <section class="streaks">
+      <div class="streak-tile" id="workoutStreakTile">
+        <span class="streak-num" id="workoutStreakNum">0</span>
+        <span class="streak-label">day workout streak</span>
+      </div>
+      <div class="streak-tile" id="cleanStreakTile">
+        <span class="streak-num" id="cleanStreakNum">0</span>
+        <span class="streak-label">day clean-eating streak</span>
+      </div>
+    </section>
+
+    <section class="actions">
+      <button class="action-btn crave-btn" id="craveBtn">
+        <span class="action-icon">🍩</span>
+        <span class="action-title">I'm craving junk food</span>
+        <span class="action-sub">Get me through the next 10 minutes</span>
+      </button>
+
+      <button class="action-btn workout-btn" id="workoutBtn">
+        <span class="action-icon">🔥</span>
+        <span class="action-title">I need to work out</span>
+        <span class="action-sub">Fire me up</span>
+      </button>
+    </section>
+
+    <section class="log-row">
+      <button class="log-btn" id="logWorkout">✅ Log today's workout</button>
+      <button class="log-btn" id="logClean">✅ Log clean eating today</button>
+    </section>
+
+    <section class="badges" id="badges"></section>
+
+  </div>
+
+  <!-- Craving overlay -->
+  <div class="overlay hidden" id="craveOverlay">
+    <div class="overlay-card">
+      <button class="close-btn" data-close="craveOverlay">✕</button>
+      <p class="overlay-kicker">CRAVING MODE</p>
+      <h2 id="craveQuote">Loading...</h2>
+      <p class="overlay-tip" id="craveTip"></p>
+
+      <div class="timer-box">
+        <p class="timer-label">Breathe through it. 90 seconds.</p>
+        <div class="timer-display" id="craveTimer">01:30</div>
+        <button class="timer-btn" id="craveTimerBtn">Start timer</button>
+      </div>
+
+      <p class="why-reminder" id="craveWhyReminder"></p>
+
+      <div class="overlay-buttons">
+        <button class="ghost-btn" id="craveWon">I didn't cave 💪</button>
+        <button class="ghost-btn subtle" id="craveNext">Give me another reason</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Workout overlay -->
+  <div class="overlay hidden" id="workoutOverlay">
+    <div class="overlay-card">
+      <button class="close-btn" data-close="workoutOverlay">✕</button>
+      <p class="overlay-kicker">GO TIME</p>
+      <h2 id="workoutQuote">Loading...</h2>
+      <p class="overlay-tip" id="workoutTip"></p>
+
+      <div class="timer-box">
+        <p class="timer-label">Just start. 10 minutes, no excuses.</p>
+        <div class="timer-display" id="workoutTimer">10:00</div>
+        <button class="timer-btn" id="workoutTimerBtn">Start timer</button>
+      </div>
+
+      <p class="why-reminder" id="workoutWhyReminder"></p>
+
+      <div class="overlay-buttons">
+        <button class="ghost-btn" id="workoutDone">Done — logging it 🏆</button>
+        <button class="ghost-btn subtle" id="workoutNext">Give me another reason</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit why modal -->
+  <div class="overlay hidden" id="whyOverlay">
+    <div class="overlay-card small">
+      <button class="close-btn" data-close="whyOverlay">✕</button>
+      <p class="overlay-kicker">YOUR WHY</p>
+      <p class="overlay-tip">Why are you doing this? Be specific. This is what you'll read at your weakest moment.</p>
+      <textarea id="whyInput" rows="4" placeholder="e.g. I want to keep up with my kids without getting winded, and feel proud in the mirror again."></textarea>
+      <div class="overlay-buttons">
+        <button class="ghost-btn" id="saveWhy">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast hidden" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
