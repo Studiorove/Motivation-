@@ -196,9 +196,15 @@ function renderCalendar() {
     else if (hasWorkout) cls = "cal-workout";
     else if (hasMeal) cls = "cal-meal";
 
+    const dayCalories = (state.calorieLog[dateStr] || []).reduce((sum, e) => sum + e.cals, 0);
+    const dateLabel = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const tooltip = dateLabel + " — " + dayCalories + " cal" +
+      (hasWorkout ? ", workout" : "") + (hasMeal ? ", clean eating" : "");
+
     const cell = document.createElement("div");
     cell.className = "cal-cell " + cls;
-    cell.title = dateStr;
+    cell.title = tooltip;
+    cell.addEventListener("click", () => toast(tooltip));
     grid.appendChild(cell);
   }
 }
@@ -247,6 +253,7 @@ function addCalorieEntry(label, cals) {
   state.calorieLog[today].push({ id: Date.now() + "-" + Math.random(), label, cals });
   saveState(state);
   renderCalories();
+  renderCalendar();
 }
 
 function removeCalorieEntry(id) {
@@ -255,6 +262,7 @@ function removeCalorieEntry(id) {
   state.calorieLog[today] = entries.filter((e) => e.id !== id);
   saveState(state);
   renderCalories();
+  renderCalendar();
 }
 
 // ---- Food search (USDA FoodData Central) ----
