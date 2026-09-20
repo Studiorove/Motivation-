@@ -5,8 +5,35 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Push. Don't Cave.</title>
 <meta name="theme-color" content="#0f0f14">
+<script>
+// Self-healing cache buster. A shortcut/bookmark can pin a stale copy of
+// this page itself - separate from the ?v= busting below, which only
+// covers files *referenced from* whatever HTML actually loaded. This
+// always fetches the version marker uncached, and force-reloads via a
+// unique URL (so the reload can't hit a cached copy either) if it's stale.
+(function () {
+  var CURRENT_VERSION = "1789930130";
+  fetch("version.json?_=" + Date.now(), { cache: "no-store" })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (!data || !data.version || data.version === CURRENT_VERSION) return;
+      // Only ever retry once per target version - if the reload doesn't
+      // actually pick up the newer page (e.g. the deploy hasn't finished
+      // propagating yet), give up silently rather than reload forever.
+      var key = "push_reload_attempted_" + data.version;
+      try {
+        if (sessionStorage.getItem(key)) return;
+        sessionStorage.setItem(key, "1");
+      } catch (e) {}
+      var url = new URL(location.href);
+      url.searchParams.set("_", Date.now());
+      location.replace(url.toString());
+    })
+    .catch(function () {});
+})();
+</script>
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="styles.css?v=3175598">
+<link rel="stylesheet" href="styles.css?v=1789930130">
 </head>
 <body>
   <div id="app">
@@ -198,6 +225,6 @@
 
   <div class="toast hidden" id="toast"></div>
 
-<script src="app.js?v=3175598"></script>
+<script src="app.js?v=1789930130"></script>
 </body>
 </html>
