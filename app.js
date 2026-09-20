@@ -56,7 +56,7 @@ function loadState() {
       return Object.assign(
         { why: "", workouts: [], meals: [], cravesResisted: 0,
           reminderTime: "18:00", notifyEnabled: false, lastNotifiedDate: "",
-          calorieLog: {} },
+          calorieLog: {}, workoutLog: {} },
         parsed
       );
     }
@@ -64,7 +64,7 @@ function loadState() {
   return {
     why: "", workouts: [], meals: [], cravesResisted: 0,
     reminderTime: "18:00", notifyEnabled: false, lastNotifiedDate: "",
-    calorieLog: {},
+    calorieLog: {}, workoutLog: {},
   };
 }
 
@@ -257,6 +257,139 @@ function removeCalorieEntry(id) {
   renderCalories();
 }
 
+// ---- Food search (Open Food Facts, free public API, no key needed) ----
+const FOOD_SEARCH_URL = "https://world.openfoodfacts.org/api/v2/search";
+
+async function searchFood(query) {
+  const url = FOOD_SEARCH_URL + "?search_terms=" + encodeURIComponent(query) +
+    "&fields=product_name,nutriments&page_size=8&json=1";
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Food search failed");
+  const data = await res.json();
+  return (data.products || [])
+    .filter((p) => p.product_name && p.nutriments && p.nutriments["energy-kcal_100g"] != null)
+    .map((p) => ({ name: p.product_name, kcalPer100g: p.nutriments["energy-kcal_100g"] }));
+}
+
+function renderFoodResults(results) {
+  const list = $("foodResults");
+  list.innerHTML = "";
+  if (results.length === 0) {
+    const li = document.createElement("li");
+    li.className = "calorie-empty";
+    li.textContent = "No matches. Try a different search, or add it manually below.";
+    list.appendChild(li);
+    return;
+  }
+  results.forEach((r) => {
+    const li = document.createElement("li");
+    li.className = "food-result-item";
+
+    const name = document.createElement("span");
+    name.className = "food-result-name";
+    name.textContent = r.name;
+
+    const kcal = document.createElement("span");
+    kcal.className = "food-result-kcal";
+    kcal.textContent = Math.round(r.kcalPer100g) + " kcal / 100g";
+
+    const grams = document.createElement("input");
+    grams.type = "number";
+    grams.className = "food-result-grams";
+    grams.value = "100";
+    grams.min = "1";
+
+    const addBtn = document.createElement("button");
+    addBtn.className = "food-result-add";
+    addBtn.textContent = "Add";
+    addBtn.addEventListener("click", () => {
+      const g = parseInt(grams.value, 10) || 100;
+      const cals = Math.round((r.kcalPer100g / 100) * g);
+      addCalorieEntry(r.name + " (" + g + "g)", cals);
+      toast("Added " + cals + " cal.");
+    });
+
+    li.appendChild(name);
+    li.appendChild(kcal);
+    li.appendChild(grams);
+    li.appendChild(addBtn);
+    list.appendChild(li);
+  });
+}
+
+async function runFoodSearch() {
+  const input = $("foodSearchInput");
+  const query = input.value.trim();
+  if (!query) return;
+  const list = $("foodResults");
+  list.innerHTML = "";
+  const loading = document.createElement("li");
+  loading.className = "calorie-empty";
+  loading.textContent = "Searching...";
+  list.appendChild(loading);
+  try {
+    const results = await searchFood(query);
+    renderFoodResults(results);
+  } catch (e) {
+    list.innerHTML = "";
+    const li = document.createElement("li");
+    li.className = "calorie-empty";
+    li.textContent = "Couldn't reach the food database. Add it manually below.";
+    list.appendChild(li);
+  }
+}
+
+// ---- Manual workout log ----
+function renderWorkoutLog() {
+  const today = todayStr();
+  const entries = state.workoutLog[today] || [];
+  const list = $("workoutList");
+  list.innerHTML = "";
+  if (entries.length === 0) {
+    const li = document.createElement("li");
+    li.className = "calorie-empty";
+    li.textContent = "Nothing logged yet today.";
+    list.appendChild(li);
+    return;
+  }
+  entries.forEach((entry) => {
+    const li = document.createElement("li");
+
+    const label = document.createElement("span");
+    label.className = "cal-entry-label";
+    label.textContent = entry.exercise;
+
+    const detail = document.createElement("span");
+    detail.className = "cal-entry-amount";
+    detail.textContent = entry.sets + "x" + entry.reps + (entry.weight ? " @ " + entry.weight : "");
+
+    const remove = document.createElement("button");
+    remove.className = "cal-entry-remove";
+    remove.textContent = "✕";
+    remove.addEventListener("click", () => removeWorkoutEntry(entry.id));
+
+    li.appendChild(label);
+    li.appendChild(detail);
+    li.appendChild(remove);
+    list.appendChild(li);
+  });
+}
+
+function addExerciseEntry(exercise, sets, reps, weight) {
+  const today = todayStr();
+  if (!state.workoutLog[today]) state.workoutLog[today] = [];
+  state.workoutLog[today].push({ id: Date.now() + "-" + Math.random(), exercise, sets, reps, weight });
+  logToday("workouts");
+}
+
+function removeWorkoutEntry(id) {
+  const today = todayStr();
+  const entries = state.workoutLog[today] || [];
+  state.workoutLog[today] = entries.filter((e) => e.id !== id);
+  saveState(state);
+  renderWorkoutLog();
+}
+
 function renderBadges() {
   const container = $("badges");
   container.innerHTML = "";
@@ -275,6 +408,7 @@ function renderAll() {
   renderBadges();
   renderCalendar();
   renderCalories();
+  renderWorkoutLog();
 }
 
 function whyReminderText() {
@@ -453,6 +587,33 @@ function init() {
     labelInput.value = "";
     amountInput.value = "";
     labelInput.focus();
+  });
+
+  $("foodSearchBtn").addEventListener("click", runFoodSearch);
+  $("foodSearchInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") runFoodSearch();
+  });
+
+  $("exerciseAddBtn").addEventListener("click", () => {
+    const exercise = $("exerciseName").value.trim();
+    const sets = parseInt($("exerciseSets").value, 10);
+    const reps = parseInt($("exerciseReps").value, 10);
+    const weight = parseInt($("exerciseWeight").value, 10);
+    if (!exercise) {
+      toast("Enter an exercise name.");
+      return;
+    }
+    if (!sets || !reps) {
+      toast("Enter sets and reps.");
+      return;
+    }
+    addExerciseEntry(exercise, sets, reps, weight || null);
+    $("exerciseName").value = "";
+    $("exerciseSets").value = "";
+    $("exerciseReps").value = "";
+    $("exerciseWeight").value = "";
+    $("exerciseName").focus();
+    toast("Exercise logged.");
   });
 
   $("settingsBtn").addEventListener("click", () => {

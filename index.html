@@ -78,12 +78,34 @@
         <p class="section-label">Today's calories</p>
         <span class="calorie-total" id="calorieTotal">0</span>
       </div>
+
+      <div class="food-search">
+        <input type="text" id="foodSearchInput" placeholder="Search a food (e.g. banana)">
+        <button class="calorie-add-btn" id="foodSearchBtn">Search</button>
+      </div>
+      <ul class="food-results" id="foodResults"></ul>
+
+      <p class="section-sub">Or add manually</p>
       <div class="calorie-form">
         <input type="text" id="calorieLabel" placeholder="e.g. chicken & rice" maxlength="40">
         <input type="number" id="calorieAmount" placeholder="cals" min="0" step="1">
         <button class="calorie-add-btn" id="calorieAddBtn">Add</button>
       </div>
       <ul class="calorie-list" id="calorieList"></ul>
+    </section>
+
+    <section class="workout-card">
+      <div class="calorie-header">
+        <p class="section-label">Today's workout</p>
+      </div>
+      <div class="workout-form">
+        <input type="text" id="exerciseName" placeholder="Exercise (e.g. squats)">
+        <input type="number" id="exerciseSets" placeholder="sets" min="0">
+        <input type="number" id="exerciseReps" placeholder="reps" min="0">
+        <input type="number" id="exerciseWeight" placeholder="wt (optional)" min="0">
+        <button class="calorie-add-btn" id="exerciseAddBtn">Add</button>
+      </div>
+      <ul class="calorie-list" id="workoutList"></ul>
     </section>
 
   </div>
