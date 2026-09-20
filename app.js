@@ -258,11 +258,13 @@ function removeCalorieEntry(id) {
 }
 
 // ---- Food search (Open Food Facts, free public API, no key needed) ----
-const FOOD_SEARCH_URL = "https://world.openfoodfacts.org/api/v2/search";
+// Note: Open Food Facts' v2 API only supports structured/filter search, not
+// free-text search - free-text search still lives on this older endpoint.
+const FOOD_SEARCH_URL = "https://world.openfoodfacts.org/cgi/search.pl";
 
 async function searchFood(query) {
   const url = FOOD_SEARCH_URL + "?search_terms=" + encodeURIComponent(query) +
-    "&fields=product_name,nutriments&page_size=8&json=1";
+    "&search_simple=1&action=process&json=1&page_size=8&fields=product_name,nutriments";
   const res = await fetch(url);
   if (!res.ok) throw new Error("Food search failed");
   const data = await res.json();
