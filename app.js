@@ -257,53 +257,35 @@ function removeCalorieEntry(id) {
   renderCalories();
 }
 
-// ---- Food search ----
-// Open Food Facts' hosted search (both the legacy and newer endpoints)
-// proved unreliable from a plain browser fetch - degraded relevance on one,
-// unreachable on the other. This is a small built-in dataset instead: no
-// network dependency, so it always works, at the cost of only covering
-// common foods. Values are approximate (USDA-style generic averages, not
-// brand-specific) kcal per 100g.
-const FOOD_DATABASE = [
-  ["Chicken breast, cooked", 165], ["Chicken thigh, cooked", 209],
-  ["Ground beef 80/20, cooked", 254], ["Ground beef 90/10, cooked", 176],
-  ["Salmon, cooked", 208], ["Tuna, canned in water", 116], ["Shrimp, cooked", 99],
-  ["Eggs, whole", 155], ["Egg whites", 52],
-  ["Greek yogurt, plain nonfat", 59], ["Greek yogurt, plain full fat", 97],
-  ["Milk, whole", 61], ["Milk, skim", 34],
-  ["Cheddar cheese", 403], ["Mozzarella cheese", 280], ["Cottage cheese", 98],
-  ["White rice, cooked", 130], ["Brown rice, cooked", 123], ["Quinoa, cooked", 120],
-  ["Oats, dry", 389], ["Oatmeal, cooked", 71],
-  ["Whole wheat bread", 247], ["White bread", 265], ["Pasta, cooked", 131],
-  ["Potato, baked", 93], ["Sweet potato, baked", 90],
-  ["Banana", 89], ["Apple", 52], ["Orange", 47], ["Strawberries", 32],
-  ["Blueberries", 57], ["Grapes", 69], ["Avocado", 160],
-  ["Broccoli", 34], ["Spinach", 23], ["Carrots", 41], ["Tomato", 18],
-  ["Cucumber", 15], ["Bell pepper", 31], ["Lettuce", 15], ["Onion", 40],
-  ["Almonds", 579], ["Peanuts", 567], ["Peanut butter", 588],
-  ["Walnuts", 654], ["Cashews", 553],
-  ["Olive oil", 884], ["Butter", 717], ["Honey", 304], ["Sugar, white", 387],
-  ["Chocolate, dark 70%", 598], ["Chocolate, milk", 535],
-  ["Potato chips", 536], ["Pretzels", 380], ["Popcorn, air-popped", 387],
-  ["French fries", 312], ["Pizza, cheese", 266],
-  ["Hamburger (fast food)", 295], ["Hot dog", 290],
-  ["Bacon", 541], ["Sausage, pork", 301], ["Ham", 145],
-  ["Turkey breast, cooked", 135], ["Salami", 336],
-  ["Tofu", 76], ["Black beans, cooked", 132], ["Chickpeas, cooked", 164],
-  ["Lentils, cooked", 116], ["Hummus", 166],
-  ["Ketchup", 101], ["Mayonnaise", 680], ["Mustard", 66], ["Soy sauce", 53],
-  ["White wine", 82], ["Red wine", 85], ["Beer", 43],
-  ["Coca-Cola", 42], ["Orange juice", 45], ["Coffee, black", 1], ["Tea, unsweetened", 1],
-  ["Ice cream, vanilla", 207], ["Donut, glazed", 452], ["Bagel, plain", 250],
-  ["Croissant", 406], ["Granola bar", 471],
-];
+// ---- Food search (USDA FoodData Central) ----
+// The US government's official nutrition database - far better documented
+// and more stable than Open Food Facts' search, which failed repeatedly.
+// DEMO_KEY is rate-limited and shared globally across everyone using it
+// without a key of their own; get a free one at fdc.nal.usda.gov/api-key-signup
+// and swap it in below if this starts throttling.
+const USDA_API_KEY = "DEMO_KEY";
+const FOOD_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search";
 
 async function searchFood(query) {
-  const q = query.trim().toLowerCase();
-  return FOOD_DATABASE
-    .filter(([name]) => name.toLowerCase().includes(q))
-    .slice(0, 8)
-    .map(([name, kcalPer100g]) => ({ name, kcalPer100g }));
+  const url = FOOD_SEARCH_URL + "?api_key=" + USDA_API_KEY +
+    "&query=" + encodeURIComponent(query) + "&pageSize=8";
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Food search failed: " + res.status);
+  const data = await res.json();
+  const foods = data.foods || [];
+
+  return foods
+    .map((food) => {
+      const nutrients = food.foodNutrients || [];
+      const energy = nutrients.find((n) => {
+        const num = String(n.nutrientNumber);
+        const unit = (n.unitName || "").toUpperCase();
+        return (num === "1008" || n.nutrientName === "Energy") && unit === "KCAL";
+      });
+      const kcal = energy ? (energy.value ?? energy.amount) : null;
+      return food.description && kcal != null ? { name: food.description, kcalPer100g: kcal } : null;
+    })
+    .filter(Boolean);
 }
 
 function renderFoodResults(results) {
@@ -355,8 +337,23 @@ function renderFoodResults(results) {
 async function runFoodSearch() {
   const query = $("foodSearchInput").value.trim();
   if (!query) return;
-  const results = await searchFood(query);
-  renderFoodResults(results);
+  const list = $("foodResults");
+  list.innerHTML = "";
+  const loading = document.createElement("li");
+  loading.className = "calorie-empty";
+  loading.textContent = "Searching...";
+  list.appendChild(loading);
+  try {
+    const results = await searchFood(query);
+    renderFoodResults(results);
+  } catch (e) {
+    console.error("Food search error:", e);
+    list.innerHTML = "";
+    const li = document.createElement("li");
+    li.className = "calorie-empty";
+    li.textContent = "Couldn't reach the food database (it may be rate-limited on the shared demo key). Add it manually below.";
+    list.appendChild(li);
+  }
 }
 
 // ---- Manual workout log ----
