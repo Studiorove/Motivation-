@@ -257,20 +257,35 @@ function removeCalorieEntry(id) {
   renderCalories();
 }
 
-// ---- Food search (Open Food Facts, free public API, no key needed) ----
-// Note: Open Food Facts' v2 API only supports structured/filter search, not
-// free-text search - free-text search still lives on this older endpoint.
-const FOOD_SEARCH_URL = "https://world.openfoodfacts.org/cgi/search.pl";
+// ---- Food search (Open Food Facts' "search-a-licious" full-text search) ----
+// Their older /cgi/search.pl text search is unreliable (matches ignored,
+// near-random results), so this uses their newer search service instead.
+// Its exact response shape isn't fully confirmed here, so parsing below
+// tries a few plausible shapes rather than assuming just one.
+const FOOD_SEARCH_URL = "https://search.openfoodfacts.org/search";
 
 async function searchFood(query) {
-  const url = FOOD_SEARCH_URL + "?search_terms=" + encodeURIComponent(query) +
-    "&search_simple=1&action=process&json=1&page_size=8&fields=product_name,nutriments";
+  const url = FOOD_SEARCH_URL + "?q=" + encodeURIComponent(query) +
+    "&page_size=8&fields=product_name,nutriments";
   const res = await fetch(url);
-  if (!res.ok) throw new Error("Food search failed");
+  if (!res.ok) throw new Error("Food search failed: " + res.status);
   const data = await res.json();
-  return (data.products || [])
-    .filter((p) => p.product_name && p.nutriments && p.nutriments["energy-kcal_100g"] != null)
-    .map((p) => ({ name: p.product_name, kcalPer100g: p.nutriments["energy-kcal_100g"] }));
+  const rawHits = data.hits || data.products || data.results || [];
+
+  const parsed = rawHits
+    .map((hit) => {
+      const p = hit._source || hit.document || hit;
+      const name = Array.isArray(p.product_name) ? p.product_name[0] : (p.product_name || p.product_name_en);
+      const nutriments = p.nutriments || {};
+      const kcal = nutriments["energy-kcal_100g"] ?? nutriments.energy_kcal_100g ?? p["energy-kcal_100g"];
+      return name && kcal != null ? { name, kcalPer100g: kcal } : null;
+    })
+    .filter(Boolean);
+
+  if (parsed.length === 0 && rawHits.length > 0) {
+    console.warn("Food search returned hits but none parsed - raw response:", data);
+  }
+  return parsed;
 }
 
 function renderFoodResults(results) {
@@ -333,6 +348,7 @@ async function runFoodSearch() {
     const results = await searchFood(query);
     renderFoodResults(results);
   } catch (e) {
+    console.error("Food search error:", e);
     list.innerHTML = "";
     const li = document.createElement("li");
     li.className = "calorie-empty";
