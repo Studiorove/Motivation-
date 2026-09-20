@@ -257,35 +257,53 @@ function removeCalorieEntry(id) {
   renderCalories();
 }
 
-// ---- Food search (Open Food Facts' "search-a-licious" full-text search) ----
-// Their older /cgi/search.pl text search is unreliable (matches ignored,
-// near-random results), so this uses their newer search service instead.
-// Its exact response shape isn't fully confirmed here, so parsing below
-// tries a few plausible shapes rather than assuming just one.
-const FOOD_SEARCH_URL = "https://search.openfoodfacts.org/search";
+// ---- Food search ----
+// Open Food Facts' hosted search (both the legacy and newer endpoints)
+// proved unreliable from a plain browser fetch - degraded relevance on one,
+// unreachable on the other. This is a small built-in dataset instead: no
+// network dependency, so it always works, at the cost of only covering
+// common foods. Values are approximate (USDA-style generic averages, not
+// brand-specific) kcal per 100g.
+const FOOD_DATABASE = [
+  ["Chicken breast, cooked", 165], ["Chicken thigh, cooked", 209],
+  ["Ground beef 80/20, cooked", 254], ["Ground beef 90/10, cooked", 176],
+  ["Salmon, cooked", 208], ["Tuna, canned in water", 116], ["Shrimp, cooked", 99],
+  ["Eggs, whole", 155], ["Egg whites", 52],
+  ["Greek yogurt, plain nonfat", 59], ["Greek yogurt, plain full fat", 97],
+  ["Milk, whole", 61], ["Milk, skim", 34],
+  ["Cheddar cheese", 403], ["Mozzarella cheese", 280], ["Cottage cheese", 98],
+  ["White rice, cooked", 130], ["Brown rice, cooked", 123], ["Quinoa, cooked", 120],
+  ["Oats, dry", 389], ["Oatmeal, cooked", 71],
+  ["Whole wheat bread", 247], ["White bread", 265], ["Pasta, cooked", 131],
+  ["Potato, baked", 93], ["Sweet potato, baked", 90],
+  ["Banana", 89], ["Apple", 52], ["Orange", 47], ["Strawberries", 32],
+  ["Blueberries", 57], ["Grapes", 69], ["Avocado", 160],
+  ["Broccoli", 34], ["Spinach", 23], ["Carrots", 41], ["Tomato", 18],
+  ["Cucumber", 15], ["Bell pepper", 31], ["Lettuce", 15], ["Onion", 40],
+  ["Almonds", 579], ["Peanuts", 567], ["Peanut butter", 588],
+  ["Walnuts", 654], ["Cashews", 553],
+  ["Olive oil", 884], ["Butter", 717], ["Honey", 304], ["Sugar, white", 387],
+  ["Chocolate, dark 70%", 598], ["Chocolate, milk", 535],
+  ["Potato chips", 536], ["Pretzels", 380], ["Popcorn, air-popped", 387],
+  ["French fries", 312], ["Pizza, cheese", 266],
+  ["Hamburger (fast food)", 295], ["Hot dog", 290],
+  ["Bacon", 541], ["Sausage, pork", 301], ["Ham", 145],
+  ["Turkey breast, cooked", 135], ["Salami", 336],
+  ["Tofu", 76], ["Black beans, cooked", 132], ["Chickpeas, cooked", 164],
+  ["Lentils, cooked", 116], ["Hummus", 166],
+  ["Ketchup", 101], ["Mayonnaise", 680], ["Mustard", 66], ["Soy sauce", 53],
+  ["White wine", 82], ["Red wine", 85], ["Beer", 43],
+  ["Coca-Cola", 42], ["Orange juice", 45], ["Coffee, black", 1], ["Tea, unsweetened", 1],
+  ["Ice cream, vanilla", 207], ["Donut, glazed", 452], ["Bagel, plain", 250],
+  ["Croissant", 406], ["Granola bar", 471],
+];
 
 async function searchFood(query) {
-  const url = FOOD_SEARCH_URL + "?q=" + encodeURIComponent(query) +
-    "&page_size=8&fields=product_name,nutriments";
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Food search failed: " + res.status);
-  const data = await res.json();
-  const rawHits = data.hits || data.products || data.results || [];
-
-  const parsed = rawHits
-    .map((hit) => {
-      const p = hit._source || hit.document || hit;
-      const name = Array.isArray(p.product_name) ? p.product_name[0] : (p.product_name || p.product_name_en);
-      const nutriments = p.nutriments || {};
-      const kcal = nutriments["energy-kcal_100g"] ?? nutriments.energy_kcal_100g ?? p["energy-kcal_100g"];
-      return name && kcal != null ? { name, kcalPer100g: kcal } : null;
-    })
-    .filter(Boolean);
-
-  if (parsed.length === 0 && rawHits.length > 0) {
-    console.warn("Food search returned hits but none parsed - raw response:", data);
-  }
-  return parsed;
+  const q = query.trim().toLowerCase();
+  return FOOD_DATABASE
+    .filter(([name]) => name.toLowerCase().includes(q))
+    .slice(0, 8)
+    .map(([name, kcalPer100g]) => ({ name, kcalPer100g }));
 }
 
 function renderFoodResults(results) {
@@ -335,26 +353,10 @@ function renderFoodResults(results) {
 }
 
 async function runFoodSearch() {
-  const input = $("foodSearchInput");
-  const query = input.value.trim();
+  const query = $("foodSearchInput").value.trim();
   if (!query) return;
-  const list = $("foodResults");
-  list.innerHTML = "";
-  const loading = document.createElement("li");
-  loading.className = "calorie-empty";
-  loading.textContent = "Searching...";
-  list.appendChild(loading);
-  try {
-    const results = await searchFood(query);
-    renderFoodResults(results);
-  } catch (e) {
-    console.error("Food search error:", e);
-    list.innerHTML = "";
-    const li = document.createElement("li");
-    li.className = "calorie-empty";
-    li.textContent = "Couldn't reach the food database. Add it manually below.";
-    list.appendChild(li);
-  }
+  const results = await searchFood(query);
+  renderFoodResults(results);
 }
 
 // ---- Manual workout log ----
