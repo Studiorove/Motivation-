@@ -165,7 +165,9 @@ function renderStreaks() {
 
 function renderCalendar() {
   const grid = $("calendarGrid");
+  const monthsBar = $("calendarMonths");
   grid.innerHTML = "";
+  monthsBar.innerHTML = "";
 
   const numDays = 91; // 13 weeks
   const today = new Date();
@@ -175,18 +177,47 @@ function renderCalendar() {
 
   // Pad so the grid's first column lines up on the correct weekday row.
   const padding = start.getDay();
-  for (let i = 0; i < padding; i++) {
-    const cell = document.createElement("div");
-    cell.className = "cal-cell cal-empty";
-    grid.appendChild(cell);
+
+  // Build a flat, column-major cell list (nulls for padding) up front so
+  // month labels can look ahead at each column before any DOM is written.
+  const cells = new Array(padding).fill(null);
+  for (let i = 0; i < numDays; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    cells.push(d);
+  }
+
+  const numColumns = Math.ceil(cells.length / 7);
+  let lastMonth = null;
+  for (let col = 0; col < numColumns; col++) {
+    let label = "";
+    for (let row = 0; row < 7; row++) {
+      const d = cells[col * 7 + row];
+      if (d) {
+        if (d.getMonth() !== lastMonth) {
+          label = d.toLocaleDateString(undefined, { month: "short" });
+          lastMonth = d.getMonth();
+        }
+        break;
+      }
+    }
+    const span = document.createElement("span");
+    span.className = "calendar-month-label";
+    span.textContent = label;
+    monthsBar.appendChild(span);
   }
 
   const workoutSet = new Set(state.workouts);
   const mealSet = new Set(state.meals);
 
-  for (let i = 0; i < numDays; i++) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
+  cells.forEach((d) => {
+    const cell = document.createElement("div");
+    if (!d) {
+      cell.className = "cal-cell cal-empty";
+      grid.appendChild(cell);
+      return;
+    }
+
     const dateStr = d.toISOString().slice(0, 10);
     const hasWorkout = workoutSet.has(dateStr);
     const hasMeal = mealSet.has(dateStr);
@@ -201,12 +232,11 @@ function renderCalendar() {
     const tooltip = dateLabel + " — " + dayCalories + " cal" +
       (hasWorkout ? ", workout" : "") + (hasMeal ? ", clean eating" : "");
 
-    const cell = document.createElement("div");
     cell.className = "cal-cell " + cls;
     cell.title = tooltip;
     cell.addEventListener("click", () => toast(tooltip));
     grid.appendChild(cell);
-  }
+  });
 }
 
 function renderCalories() {
