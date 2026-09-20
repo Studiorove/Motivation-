@@ -12,7 +12,7 @@
 // always fetches the version marker uncached, and force-reloads via a
 // unique URL (so the reload can't hit a cached copy either) if it's stale.
 (function () {
-  var CURRENT_VERSION = "1789930130";
+  var CURRENT_VERSION = "1789930708";
   fetch("version.json?_=" + Date.now(), { cache: "no-store" })
     .then(function (res) { return res.json(); })
     .then(function (data) {
@@ -33,7 +33,7 @@
 })();
 </script>
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="styles.css?v=1789930130">
+<link rel="stylesheet" href="styles.css?v=1789930708">
 </head>
 <body>
   <div id="app">
@@ -232,6 +232,6 @@
 
   <div class="toast hidden" id="toast"></div>
 
-<script src="app.js?v=1789930130"></script>
+<script src="app.js?v=1789930708"></script>
 </body>
 </html>
