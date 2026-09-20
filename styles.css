@@ -146,42 +146,6 @@ body {
 .action-title { font-size: 19px; font-weight: 800; }
 .action-sub { font-size: 13px; opacity: 0.75; font-weight: 600; }
 
-.log-row {
-  display: flex;
-  gap: 10px;
-  margin: 8px 0 20px;
-}
-.log-btn {
-  flex: 1;
-  background: transparent;
-  border: 1px solid #33333d;
-  color: var(--text-dim);
-  border-radius: 12px;
-  padding: 10px 8px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.log-btn:active { background: #1a1a22; }
-
-.badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-.badge {
-  background: var(--bg-card);
-  border: 1px solid #26262f;
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.badge.earned {
-  color: #ffd76a;
-  border-color: #4a3f1f;
-}
-
 .section-label {
   margin: 0;
   font-size: 12px;

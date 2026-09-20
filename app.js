@@ -39,15 +39,6 @@ const WORKOUT_TIPS = [
   "Lower the bar: a walk counts. Doing something beats doing nothing.",
 ];
 
-const BADGE_DEFS = [
-  { id: "streak3", label: "3-day streak", check: (s) => Math.max(streakLen(s.workouts), streakLen(s.meals)) >= 3 },
-  { id: "streak7", label: "7-day streak", check: (s) => Math.max(streakLen(s.workouts), streakLen(s.meals)) >= 7 },
-  { id: "streak30", label: "30-day streak", check: (s) => Math.max(streakLen(s.workouts), streakLen(s.meals)) >= 30 },
-  { id: "resist10", label: "Resisted 10 cravings", check: (s) => s.cravesResisted >= 10 },
-  { id: "resist50", label: "Resisted 50 cravings", check: (s) => s.cravesResisted >= 50 },
-  { id: "workouts25", label: "25 workouts logged", check: (s) => s.workouts.length >= 25 },
-];
-
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -333,9 +324,7 @@ function addCalorieEntry(label, cals) {
   const today = todayStr();
   if (!state.calorieLog[today]) state.calorieLog[today] = [];
   state.calorieLog[today].push({ id: Date.now() + "-" + Math.random(), label, cals });
-  saveState(state);
-  renderCalories();
-  renderCalendar();
+  logToday("meals");
 }
 
 function removeCalorieEntry(id) {
@@ -499,22 +488,9 @@ function removeWorkoutEntry(id) {
   renderWorkoutLog();
 }
 
-function renderBadges() {
-  const container = $("badges");
-  container.innerHTML = "";
-  BADGE_DEFS.forEach((b) => {
-    const earned = b.check(state);
-    const el = document.createElement("span");
-    el.className = "badge" + (earned ? " earned" : "");
-    el.textContent = (earned ? "★ " : "") + b.label;
-    container.appendChild(el);
-  });
-}
-
 function renderAll() {
   renderWhy();
   renderStreaks();
-  renderBadges();
   renderCalendar();
   renderCalories();
   renderWorkoutLog();
@@ -673,15 +649,6 @@ function init() {
     logToday("workouts");
     hideOverlay("workoutOverlay");
     toast("Workout logged. Nice work.");
-  });
-
-  $("logWorkout").addEventListener("click", () => {
-    logToday("workouts");
-    toast("Workout logged.");
-  });
-  $("logClean").addEventListener("click", () => {
-    logToday("meals");
-    toast("Clean eating logged.");
   });
 
   $("calorieAddBtn").addEventListener("click", () => {
