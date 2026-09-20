@@ -165,57 +165,32 @@ function renderStreaks() {
 
 function renderCalendar() {
   const grid = $("calendarGrid");
-  const monthsBar = $("calendarMonths");
   grid.innerHTML = "";
-  monthsBar.innerHTML = "";
 
-  const numDays = 91; // 13 weeks
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const start = new Date(today);
-  start.setDate(start.getDate() - (numDays - 1));
-
-  // Pad so the grid's first column lines up on the correct weekday row.
-  const padding = start.getDay();
-
-  // Build a flat, column-major cell list (nulls for padding) up front so
-  // month labels can look ahead at each column before any DOM is written.
-  const cells = new Array(padding).fill(null);
-  for (let i = 0; i < numDays; i++) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    cells.push(d);
-  }
-
-  const numColumns = Math.ceil(cells.length / 7);
-  let lastMonth = null;
-  for (let col = 0; col < numColumns; col++) {
-    let label = "";
-    for (let row = 0; row < 7; row++) {
-      const d = cells[col * 7 + row];
-      if (d) {
-        if (d.getMonth() !== lastMonth) {
-          label = d.toLocaleDateString(undefined, { month: "short" });
-          lastMonth = d.getMonth();
-        }
-        break;
-      }
-    }
-    const span = document.createElement("span");
-    span.className = "calendar-month-label";
-    span.textContent = label;
-    monthsBar.appendChild(span);
-  }
+  // 5 full weeks (Sun-Sat), ending with the current week - big enough cells
+  // to tap on a phone, with the date number printed right on each one.
+  const currentWeekStart = new Date(today);
+  currentWeekStart.setDate(today.getDate() - today.getDay());
+  const start = new Date(currentWeekStart);
+  start.setDate(currentWeekStart.getDate() - 28);
 
   const workoutSet = new Set(state.workouts);
   const mealSet = new Set(state.meals);
+  const todayDateStr = todayStr();
 
-  cells.forEach((d) => {
+  for (let i = 0; i < 35; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+
     const cell = document.createElement("div");
-    if (!d) {
-      cell.className = "cal-cell cal-empty";
+    cell.textContent = d.getDate();
+
+    if (d > today) {
+      cell.className = "cal-cell cal-future";
       grid.appendChild(cell);
-      return;
+      continue;
     }
 
     const dateStr = d.toISOString().slice(0, 10);
@@ -226,6 +201,7 @@ function renderCalendar() {
     if (hasWorkout && hasMeal) cls = "cal-both";
     else if (hasWorkout) cls = "cal-workout";
     else if (hasMeal) cls = "cal-meal";
+    if (dateStr === todayDateStr) cls += " cal-today";
 
     const dayCalories = (state.calorieLog[dateStr] || []).reduce((sum, e) => sum + e.cals, 0);
     const dateLabel = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -236,7 +212,7 @@ function renderCalendar() {
     cell.title = tooltip;
     cell.addEventListener("click", () => toast(tooltip));
     grid.appendChild(cell);
-  });
+  }
 }
 
 function renderCalories() {
