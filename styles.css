@@ -285,6 +285,15 @@ body {
   font-size: 12px;
   color: var(--text-dim);
 }
+.day-section-heading {
+  margin-top: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.day-section-heading:first-of-type {
+  margin-top: 4px;
+}
 
 .calorie-form, .food-search, .workout-form {
   display: flex;

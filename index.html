@@ -188,6 +188,21 @@
     </div>
   </div>
 
+  <!-- Day detail modal (opened by tapping a calendar cell) -->
+  <div class="overlay hidden" id="dayOverlay">
+    <div class="overlay-card">
+      <button class="close-btn" data-close="dayOverlay">✕</button>
+      <p class="overlay-kicker" id="dayOverlayDate">DATE</p>
+      <h2 id="dayOverlayStatus"></h2>
+
+      <p class="section-sub day-section-heading">Calories — <span id="dayOverlayCalTotal">0</span></p>
+      <ul class="calorie-list" id="dayOverlayCalList"></ul>
+
+      <p class="section-sub day-section-heading">Workout</p>
+      <ul class="calorie-list" id="dayOverlayWorkoutList"></ul>
+    </div>
+  </div>
+
   <div class="toast hidden" id="toast"></div>
 
 <script src="app.js?v=722b7f6"></script>

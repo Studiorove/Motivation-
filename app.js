@@ -221,9 +221,74 @@ function renderCalendar() {
 
     cell.className = "cal-cell " + cls;
     cell.title = tooltip;
-    cell.addEventListener("click", () => toast(tooltip));
+    cell.addEventListener("click", () => openDayDetail(dateStr, d));
     grid.appendChild(cell);
   }
+}
+
+function openDayDetail(dateStr, d) {
+  const hasWorkout = state.workouts.includes(dateStr);
+  const hasMeal = state.meals.includes(dateStr);
+  const calEntries = state.calorieLog[dateStr] || [];
+  const workoutEntries = state.workoutLog[dateStr] || [];
+  const dayCalories = calEntries.reduce((sum, e) => sum + e.cals, 0);
+
+  $("dayOverlayDate").textContent = d.toLocaleDateString(undefined, {
+    weekday: "long", month: "long", day: "numeric",
+  });
+
+  const statusParts = [];
+  if (hasWorkout) statusParts.push("Workout logged");
+  if (hasMeal) statusParts.push("Clean eating logged");
+  $("dayOverlayStatus").textContent = statusParts.length ? statusParts.join(" · ") : "Nothing logged this day";
+
+  $("dayOverlayCalTotal").textContent = dayCalories;
+
+  const calList = $("dayOverlayCalList");
+  calList.innerHTML = "";
+  if (calEntries.length === 0) {
+    const li = document.createElement("li");
+    li.className = "calorie-empty";
+    li.textContent = "No food logged.";
+    calList.appendChild(li);
+  } else {
+    calEntries.forEach((entry) => {
+      const li = document.createElement("li");
+      const label = document.createElement("span");
+      label.className = "cal-entry-label";
+      label.textContent = entry.label || "(unnamed)";
+      const amount = document.createElement("span");
+      amount.className = "cal-entry-amount";
+      amount.textContent = entry.cals + " cal";
+      li.appendChild(label);
+      li.appendChild(amount);
+      calList.appendChild(li);
+    });
+  }
+
+  const workoutList = $("dayOverlayWorkoutList");
+  workoutList.innerHTML = "";
+  if (workoutEntries.length === 0) {
+    const li = document.createElement("li");
+    li.className = "calorie-empty";
+    li.textContent = "No exercise logged.";
+    workoutList.appendChild(li);
+  } else {
+    workoutEntries.forEach((entry) => {
+      const li = document.createElement("li");
+      const label = document.createElement("span");
+      label.className = "cal-entry-label";
+      label.textContent = entry.exercise;
+      const detail = document.createElement("span");
+      detail.className = "cal-entry-amount";
+      detail.textContent = entry.sets + "x" + entry.reps + (entry.weight ? " @ " + entry.weight : "");
+      li.appendChild(label);
+      li.appendChild(detail);
+      workoutList.appendChild(li);
+    });
+  }
+
+  showOverlay("dayOverlay");
 }
 
 function renderCalories() {
