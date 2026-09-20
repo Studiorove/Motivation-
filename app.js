@@ -74,14 +74,25 @@ function saveState(state) {
   } catch (e) {}
 }
 
+// Local calendar date as YYYY-MM-DD. Deliberately not toISOString(), which
+// converts to UTC - a Date built from local midnight rolls back to the
+// previous UTC day for anyone east of UTC, silently corrupting every
+// date-keyed lookup (calendar cells, streaks, calorie/workout logs).
+function toDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + day;
+}
+
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return toDateStr(new Date());
 }
 
 function daysAgoStr(n) {
   const d = new Date();
   d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return toDateStr(d);
 }
 
 // Counts consecutive days up to and including today (or yesterday, so it
@@ -193,7 +204,7 @@ function renderCalendar() {
       continue;
     }
 
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = toDateStr(d);
     const hasWorkout = workoutSet.has(dateStr);
     const hasMeal = mealSet.has(dateStr);
 
