@@ -272,12 +272,9 @@ body {
 .calorie-form input[type="number"] {
   width: 70px;
 }
-.workout-form input[type="text"] {
-  flex: 1 1 100%;
-}
 .workout-form input[type="number"] {
   flex: 1;
-  min-width: 64px;
+  min-width: 62px;
 }
 .calorie-form input, .food-search input, .workout-form input {
   background: #0f0f14;
@@ -296,6 +293,74 @@ body {
   padding: 0 16px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.exercise-autocomplete {
+  position: relative;
+  margin-bottom: 8px;
+}
+.exercise-autocomplete input {
+  width: 100%;
+  background: #0f0f14;
+  color: var(--text);
+  border: 1px solid #33333d;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 14px;
+  font-family: inherit;
+}
+.exercise-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  background: #17171d;
+  border: 1px solid #2a2a34;
+  border-radius: 10px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.exercise-suggestions.hidden { display: none; }
+.exercise-suggestions li {
+  padding: 8px 10px;
+  font-size: 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.exercise-suggestions li:active,
+.exercise-suggestions li:hover {
+  background: #26262f;
+}
+
+.unit-toggle {
+  display: flex;
+  border: 1px solid #33333d;
+  border-radius: 10px;
+  overflow: hidden;
+  flex: 1 1 auto;
+}
+
+.workout-form .calorie-add-btn {
+  flex: 1 1 auto;
+  min-width: 70px;
+  padding: 10px 16px;
+}
+.unit-btn {
+  background: #0f0f14;
+  color: var(--text-dim);
+  border: none;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.unit-btn.active {
+  background: var(--accent);
+  color: white;
 }
 
 .food-results {

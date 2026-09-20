@@ -39,6 +39,33 @@ const WORKOUT_TIPS = [
   "Lower the bar: a walk counts. Doing something beats doing nothing.",
 ];
 
+const EXERCISE_LIST = [
+  "Squats", "Front Squats", "Bulgarian Split Squats", "Leg Press", "Leg Extension",
+  "Leg Curl", "Lunges", "Romanian Deadlift", "Deadlift", "Sumo Deadlift", "Hip Thrust",
+  "Calf Raises", "Bench Press", "Incline Bench Press", "Dumbbell Bench Press",
+  "Push-ups", "Chest Fly", "Overhead Press", "Arnold Press", "Lateral Raises",
+  "Front Raises", "Rear Delt Fly", "Shrugs", "Pull-ups", "Chin-ups", "Lat Pulldown",
+  "Seated Row", "Bent Over Row", "Dumbbell Row", "Face Pulls", "Bicep Curls",
+  "Hammer Curls", "Preacher Curls", "Tricep Extensions", "Tricep Pushdown",
+  "Skull Crushers", "Dips", "Plank", "Sit-ups", "Crunches", "Russian Twists",
+  "Hanging Leg Raises", "Mountain Climbers", "Burpees", "Kettlebell Swings",
+  "Farmer's Carry", "Box Jumps", "Battle Ropes", "Running", "Cycling", "Rowing",
+  "Swimming", "Walking", "Jump Rope", "Elliptical", "Stair Climber", "Yoga",
+  "Boxing", "HIIT Circuit",
+];
+
+// Weight conversion, rounded to 1 decimal.
+function kgToLbs(kg) { return Math.round(kg * 2.20462 * 10) / 10; }
+function lbsToKg(lbs) { return Math.round(lbs * 0.453592 * 10) / 10; }
+
+function formatWeight(entry) {
+  if (entry.weight == null) return "";
+  if (!entry.weightUnit) return " @ " + entry.weight; // older entries logged before units existed
+  const converted = entry.weightUnit === "kg" ? kgToLbs(entry.weight) : lbsToKg(entry.weight);
+  const otherUnit = entry.weightUnit === "kg" ? "lbs" : "kg";
+  return " @ " + entry.weight + entry.weightUnit + " (" + converted + otherUnit + ")";
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -47,7 +74,7 @@ function loadState() {
       return Object.assign(
         { why: "", workouts: [], meals: [], cravesResisted: 0,
           reminderTime: "18:00", notifyEnabled: false, lastNotifiedDate: "",
-          calorieLog: {}, workoutLog: {} },
+          calorieLog: {}, workoutLog: {}, weightUnit: "kg" },
         parsed
       );
     }
@@ -55,7 +82,7 @@ function loadState() {
   return {
     why: "", workouts: [], meals: [], cravesResisted: 0,
     reminderTime: "18:00", notifyEnabled: false, lastNotifiedDate: "",
-    calorieLog: {}, workoutLog: {},
+    calorieLog: {}, workoutLog: {}, weightUnit: "kg",
   };
 }
 
@@ -272,7 +299,7 @@ function openDayDetail(dateStr, d) {
       label.textContent = entry.exercise;
       const detail = document.createElement("span");
       detail.className = "cal-entry-amount";
-      detail.textContent = entry.sets + "x" + entry.reps + (entry.weight ? " @ " + entry.weight : "");
+      detail.textContent = entry.sets + "x" + entry.reps + formatWeight(entry);
       li.appendChild(label);
       li.appendChild(detail);
       workoutList.appendChild(li);
@@ -459,7 +486,7 @@ function renderWorkoutLog() {
 
     const detail = document.createElement("span");
     detail.className = "cal-entry-amount";
-    detail.textContent = entry.sets + "x" + entry.reps + (entry.weight ? " @ " + entry.weight : "");
+    detail.textContent = entry.sets + "x" + entry.reps + formatWeight(entry);
 
     const remove = document.createElement("button");
     remove.className = "cal-entry-remove";
@@ -473,10 +500,13 @@ function renderWorkoutLog() {
   });
 }
 
-function addExerciseEntry(exercise, sets, reps, weight) {
+function addExerciseEntry(exercise, sets, reps, weight, weightUnit) {
   const today = todayStr();
   if (!state.workoutLog[today]) state.workoutLog[today] = [];
-  state.workoutLog[today].push({ id: Date.now() + "-" + Math.random(), exercise, sets, reps, weight });
+  state.workoutLog[today].push({
+    id: Date.now() + "-" + Math.random(), exercise, sets, reps, weight,
+    weightUnit: weight != null ? weightUnit : null,
+  });
   logToday("workouts");
 }
 
@@ -606,6 +636,10 @@ function checkReminder() {
 function init() {
   renderAll();
 
+  document.querySelectorAll("#weightUnitToggle .unit-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.unit === state.weightUnit);
+  });
+
   $("editGoalBtn").addEventListener("click", () => {
     $("whyInput").value = state.why || "";
     showOverlay("whyOverlay");
@@ -674,7 +708,8 @@ function init() {
     const exercise = $("exerciseName").value.trim();
     const sets = parseInt($("exerciseSets").value, 10);
     const reps = parseInt($("exerciseReps").value, 10);
-    const weight = parseInt($("exerciseWeight").value, 10);
+    const weightRaw = parseFloat($("exerciseWeight").value);
+    const weight = isNaN(weightRaw) ? null : weightRaw;
     if (!exercise) {
       toast("Enter an exercise name.");
       return;
@@ -683,13 +718,58 @@ function init() {
       toast("Enter sets and reps.");
       return;
     }
-    addExerciseEntry(exercise, sets, reps, weight || null);
+    addExerciseEntry(exercise, sets, reps, weight, state.weightUnit);
     $("exerciseName").value = "";
     $("exerciseSets").value = "";
     $("exerciseReps").value = "";
     $("exerciseWeight").value = "";
     $("exerciseName").focus();
     toast("Exercise logged.");
+  });
+
+  $("exerciseName").addEventListener("input", () => {
+    const q = $("exerciseName").value.trim().toLowerCase();
+    const suggestionsEl = $("exerciseSuggestions");
+    if (!q) {
+      suggestionsEl.classList.add("hidden");
+      suggestionsEl.innerHTML = "";
+      return;
+    }
+    const matches = EXERCISE_LIST.filter((name) => name.toLowerCase().includes(q)).slice(0, 6);
+    if (matches.length === 0) {
+      suggestionsEl.classList.add("hidden");
+      suggestionsEl.innerHTML = "";
+      return;
+    }
+    suggestionsEl.innerHTML = "";
+    matches.forEach((name) => {
+      const li = document.createElement("li");
+      li.textContent = name;
+      li.addEventListener("mousedown", (e) => {
+        e.preventDefault(); // keep focus so the blur handler below doesn't fire first
+        $("exerciseName").value = name;
+        suggestionsEl.classList.add("hidden");
+        suggestionsEl.innerHTML = "";
+      });
+      suggestionsEl.appendChild(li);
+    });
+    suggestionsEl.classList.remove("hidden");
+  });
+
+  $("exerciseName").addEventListener("blur", () => {
+    setTimeout(() => {
+      $("exerciseSuggestions").classList.add("hidden");
+    }, 150);
+  });
+
+  $("weightUnitToggle").addEventListener("click", (e) => {
+    const btn = e.target.closest(".unit-btn");
+    if (!btn) return;
+    state.weightUnit = btn.dataset.unit;
+    saveState(state);
+    document.querySelectorAll("#weightUnitToggle .unit-btn").forEach((b) => {
+      b.classList.toggle("active", b === btn);
+    });
   });
 
   $("settingsBtn").addEventListener("click", () => {

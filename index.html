@@ -121,11 +121,18 @@
       <div class="calorie-header">
         <p class="section-label">Today's workout</p>
       </div>
+      <div class="exercise-autocomplete">
+        <input type="text" id="exerciseName" placeholder="Exercise (e.g. squats)" autocomplete="off">
+        <ul class="exercise-suggestions hidden" id="exerciseSuggestions"></ul>
+      </div>
       <div class="workout-form">
-        <input type="text" id="exerciseName" placeholder="Exercise (e.g. squats)">
         <input type="number" id="exerciseSets" placeholder="sets" min="0">
         <input type="number" id="exerciseReps" placeholder="reps" min="0">
-        <input type="number" id="exerciseWeight" placeholder="wt (optional)" min="0">
+        <input type="number" id="exerciseWeight" placeholder="wt" min="0" step="0.5">
+        <div class="unit-toggle" id="weightUnitToggle">
+          <button type="button" class="unit-btn active" data-unit="kg">kg</button>
+          <button type="button" class="unit-btn" data-unit="lbs">lbs</button>
+        </div>
         <button class="calorie-add-btn" id="exerciseAddBtn">Add</button>
       </div>
       <ul class="calorie-list" id="workoutList"></ul>
