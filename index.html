@@ -13,7 +13,10 @@
 
     <header class="topbar">
       <div class="brand">PUSH<span>.</span></div>
-      <button id="editGoalBtn" class="icon-btn" title="Edit your why">✎</button>
+      <div class="topbar-icons">
+        <button id="settingsBtn" class="icon-btn" title="Reminder settings">⏰</button>
+        <button id="editGoalBtn" class="icon-btn" title="Edit your why">✎</button>
+      </div>
     </header>
 
     <section class="why-card" id="whyCard">
@@ -25,12 +28,16 @@
       <div class="streak-tile" id="workoutStreakTile">
         <span class="streak-num" id="workoutStreakNum">0</span>
         <span class="streak-label">day workout streak</span>
+        <span class="streak-best" id="workoutStreakBest">best: 0</span>
       </div>
       <div class="streak-tile" id="cleanStreakTile">
         <span class="streak-num" id="cleanStreakNum">0</span>
         <span class="streak-label">day clean-eating streak</span>
+        <span class="streak-best" id="cleanStreakBest">best: 0</span>
       </div>
     </section>
+
+    <p class="total-days" id="totalDays"></p>
 
     <section class="actions">
       <button class="action-btn crave-btn" id="craveBtn">
@@ -52,6 +59,32 @@
     </section>
 
     <section class="badges" id="badges"></section>
+
+    <section class="calendar-card">
+      <div class="calendar-header">
+        <p class="section-label">Last 13 weeks</p>
+        <div class="calendar-legend">
+          <span class="legend-dot cal-none"></span> none
+          <span class="legend-dot cal-workout"></span> workout
+          <span class="legend-dot cal-meal"></span> clean
+          <span class="legend-dot cal-both"></span> both
+        </div>
+      </div>
+      <div class="calendar-grid" id="calendarGrid"></div>
+    </section>
+
+    <section class="calorie-card">
+      <div class="calorie-header">
+        <p class="section-label">Today's calories</p>
+        <span class="calorie-total" id="calorieTotal">0</span>
+      </div>
+      <div class="calorie-form">
+        <input type="text" id="calorieLabel" placeholder="e.g. chicken & rice" maxlength="40">
+        <input type="number" id="calorieAmount" placeholder="cals" min="0" step="1">
+        <button class="calorie-add-btn" id="calorieAddBtn">Add</button>
+      </div>
+      <ul class="calorie-list" id="calorieList"></ul>
+    </section>
 
   </div>
 
@@ -110,6 +143,22 @@
       <textarea id="whyInput" rows="4" placeholder="e.g. I want to keep up with my kids without getting winded, and feel proud in the mirror again."></textarea>
       <div class="overlay-buttons">
         <button class="ghost-btn" id="saveWhy">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reminder settings modal -->
+  <div class="overlay hidden" id="settingsOverlay">
+    <div class="overlay-card small">
+      <button class="close-btn" data-close="settingsOverlay">✕</button>
+      <p class="overlay-kicker">DAILY REMINDER</p>
+      <p class="overlay-tip">If you have this open (or open it) at or after this time and haven't logged a workout or clean eating yet, you'll get a nudge. Note: this can't fire while your browser is fully closed — that needs a backend this app doesn't have.</p>
+      <label class="settings-label" for="reminderTimeInput">Remind me at</label>
+      <input type="time" id="reminderTimeInput" value="18:00">
+      <p class="settings-status" id="notifyStatus"></p>
+      <div class="overlay-buttons">
+        <button class="ghost-btn" id="enableReminder">Enable reminder</button>
+        <button class="ghost-btn subtle" id="disableReminder">Turn off</button>
       </div>
     </div>
   </div>

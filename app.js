@@ -51,9 +51,21 @@ const BADGE_DEFS = [
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return Object.assign(
+        { why: "", workouts: [], meals: [], cravesResisted: 0,
+          reminderTime: "18:00", notifyEnabled: false, lastNotifiedDate: "",
+          calorieLog: {} },
+        parsed
+      );
+    }
   } catch (e) {}
-  return { why: "", workouts: [], meals: [], cravesResisted: 0 };
+  return {
+    why: "", workouts: [], meals: [], cravesResisted: 0,
+    reminderTime: "18:00", notifyEnabled: false, lastNotifiedDate: "",
+    calorieLog: {},
+  };
 }
 
 function saveState(state) {
@@ -83,6 +95,31 @@ function streakLen(dateList) {
     cursor++;
   }
   return count;
+}
+
+// Longest run of consecutive days ever logged in a date list (not just the
+// streak ending today) — used for the "best streak" stat.
+function longestStreak(dateList) {
+  const dates = [...new Set(dateList)].sort();
+  let best = 0;
+  let current = 0;
+  let prevTime = null;
+  for (const d of dates) {
+    const t = new Date(d + "T00:00:00").getTime();
+    if (prevTime !== null && t - prevTime === 86400000) {
+      current++;
+    } else {
+      current = 1;
+    }
+    best = Math.max(best, current);
+    prevTime = t;
+  }
+  return best;
+}
+
+function loggedToday(state) {
+  const today = todayStr();
+  return state.workouts.includes(today) || state.meals.includes(today);
 }
 
 let state = loadState();
@@ -119,6 +156,105 @@ function renderWhy() {
 function renderStreaks() {
   $("workoutStreakNum").textContent = streakLen(state.workouts);
   $("cleanStreakNum").textContent = streakLen(state.meals);
+  $("workoutStreakBest").textContent = "best: " + longestStreak(state.workouts);
+  $("cleanStreakBest").textContent = "best: " + longestStreak(state.meals);
+
+  const totalDays = new Set([...state.workouts, ...state.meals]).size;
+  $("totalDays").textContent = totalDays + " total day" + (totalDays === 1 ? "" : "s") + " logged";
+}
+
+function renderCalendar() {
+  const grid = $("calendarGrid");
+  grid.innerHTML = "";
+
+  const numDays = 91; // 13 weeks
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(today);
+  start.setDate(start.getDate() - (numDays - 1));
+
+  // Pad so the grid's first column lines up on the correct weekday row.
+  const padding = start.getDay();
+  for (let i = 0; i < padding; i++) {
+    const cell = document.createElement("div");
+    cell.className = "cal-cell cal-empty";
+    grid.appendChild(cell);
+  }
+
+  const workoutSet = new Set(state.workouts);
+  const mealSet = new Set(state.meals);
+
+  for (let i = 0; i < numDays; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const hasWorkout = workoutSet.has(dateStr);
+    const hasMeal = mealSet.has(dateStr);
+
+    let cls = "cal-none";
+    if (hasWorkout && hasMeal) cls = "cal-both";
+    else if (hasWorkout) cls = "cal-workout";
+    else if (hasMeal) cls = "cal-meal";
+
+    const cell = document.createElement("div");
+    cell.className = "cal-cell " + cls;
+    cell.title = dateStr;
+    grid.appendChild(cell);
+  }
+}
+
+function renderCalories() {
+  const today = todayStr();
+  const entries = state.calorieLog[today] || [];
+  const total = entries.reduce((sum, e) => sum + e.cals, 0);
+  $("calorieTotal").textContent = total;
+
+  const list = $("calorieList");
+  list.innerHTML = "";
+  if (entries.length === 0) {
+    const li = document.createElement("li");
+    li.className = "calorie-empty";
+    li.textContent = "Nothing logged yet today.";
+    list.appendChild(li);
+    return;
+  }
+  entries.forEach((entry) => {
+    const li = document.createElement("li");
+
+    const label = document.createElement("span");
+    label.className = "cal-entry-label";
+    label.textContent = entry.label || "(unnamed)";
+
+    const amount = document.createElement("span");
+    amount.className = "cal-entry-amount";
+    amount.textContent = entry.cals + " cal";
+
+    const remove = document.createElement("button");
+    remove.className = "cal-entry-remove";
+    remove.textContent = "✕";
+    remove.addEventListener("click", () => removeCalorieEntry(entry.id));
+
+    li.appendChild(label);
+    li.appendChild(amount);
+    li.appendChild(remove);
+    list.appendChild(li);
+  });
+}
+
+function addCalorieEntry(label, cals) {
+  const today = todayStr();
+  if (!state.calorieLog[today]) state.calorieLog[today] = [];
+  state.calorieLog[today].push({ id: Date.now() + "-" + Math.random(), label, cals });
+  saveState(state);
+  renderCalories();
+}
+
+function removeCalorieEntry(id) {
+  const today = todayStr();
+  const entries = state.calorieLog[today] || [];
+  state.calorieLog[today] = entries.filter((e) => e.id !== id);
+  saveState(state);
+  renderCalories();
 }
 
 function renderBadges() {
@@ -137,6 +273,8 @@ function renderAll() {
   renderWhy();
   renderStreaks();
   renderBadges();
+  renderCalendar();
+  renderCalories();
 }
 
 function whyReminderText() {
@@ -217,6 +355,35 @@ function logToday(listName) {
   renderAll();
 }
 
+// ---- Reminder / notifications ----
+// Best-effort only: this can fire while the app is open, not while the
+// browser is fully closed (that requires a push server this app doesn't have).
+function renderNotifyStatus() {
+  const el = $("notifyStatus");
+  if (!("Notification" in window)) {
+    el.textContent = "Notifications aren't supported in this browser.";
+  } else if (state.notifyEnabled && Notification.permission === "granted") {
+    el.textContent = "On — reminding you at " + state.reminderTime + " if you haven't logged that day.";
+  } else {
+    el.textContent = "Off.";
+  }
+  $("reminderTimeInput").value = state.reminderTime || "18:00";
+}
+
+function checkReminder() {
+  if (!state.notifyEnabled || !("Notification" in window) || Notification.permission !== "granted") return;
+  const today = todayStr();
+  if (state.lastNotifiedDate === today) return;
+  const now = new Date();
+  const [h, m] = (state.reminderTime || "18:00").split(":").map(Number);
+  const reminderPassed = now.getHours() > h || (now.getHours() === h && now.getMinutes() >= m);
+  if (reminderPassed && !loggedToday(state)) {
+    new Notification("Push", { body: "You haven't logged a workout or clean eating today. Still time." });
+    state.lastNotifiedDate = today;
+    saveState(state);
+  }
+}
+
 function init() {
   renderAll();
 
@@ -274,6 +441,53 @@ function init() {
     toast("Clean eating logged.");
   });
 
+  $("calorieAddBtn").addEventListener("click", () => {
+    const labelInput = $("calorieLabel");
+    const amountInput = $("calorieAmount");
+    const cals = parseInt(amountInput.value, 10);
+    if (!cals || cals <= 0) {
+      toast("Enter a calorie amount first.");
+      return;
+    }
+    addCalorieEntry(labelInput.value.trim(), cals);
+    labelInput.value = "";
+    amountInput.value = "";
+    labelInput.focus();
+  });
+
+  $("settingsBtn").addEventListener("click", () => {
+    renderNotifyStatus();
+    showOverlay("settingsOverlay");
+  });
+
+  $("enableReminder").addEventListener("click", () => {
+    state.reminderTime = $("reminderTimeInput").value || "18:00";
+    if (!("Notification" in window)) {
+      toast("Notifications aren't supported in this browser.");
+      return;
+    }
+    Notification.requestPermission().then((perm) => {
+      if (perm === "granted") {
+        state.notifyEnabled = true;
+        saveState(state);
+        renderNotifyStatus();
+        toast("Reminder enabled.");
+      } else {
+        state.notifyEnabled = false;
+        saveState(state);
+        renderNotifyStatus();
+        toast("Notification permission denied.");
+      }
+    });
+  });
+
+  $("disableReminder").addEventListener("click", () => {
+    state.notifyEnabled = false;
+    saveState(state);
+    renderNotifyStatus();
+    toast("Reminder turned off.");
+  });
+
   document.querySelectorAll("[data-close]").forEach((btn) => {
     btn.addEventListener("click", () => hideOverlay(btn.dataset.close));
   });
@@ -282,6 +496,9 @@ function init() {
       if (e.target === ov) ov.classList.add("hidden");
     });
   });
+
+  checkReminder();
+  setInterval(checkReminder, 60000);
 }
 
 document.addEventListener("DOMContentLoaded", init);
