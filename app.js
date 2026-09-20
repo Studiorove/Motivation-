@@ -324,6 +324,8 @@ function renderFoodResults(results) {
       const cals = Math.round((r.kcalPer100g / 100) * g);
       addCalorieEntry(r.name + " (" + g + "g)", cals);
       toast("Added " + cals + " cal.");
+      $("foodSearchInput").value = "";
+      $("foodResults").innerHTML = "";
     });
 
     li.appendChild(name);
