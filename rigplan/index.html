@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Rig Plan</title>
+<meta name="theme-color" content="#0f0f14">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <button class="icon-btn only-narrow" data-act="toggle-left" title="Tools, kit and crew">☰</button>
+  <div class="brand">RIG<span>PLAN</span></div>
+  <input id="projName" class="proj-name" maxlength="80" aria-label="Project name">
+
+  <div class="modes" role="toolbar" aria-label="Mode">
+    <button class="mode-btn" data-act="mode" data-mode="select" title="Select / move (V)">↖ Select</button>
+    <button class="mode-btn" data-act="mode" data-mode="cable" title="Run a cable (C)">〰 Cable</button>
+    <button class="mode-btn" data-act="mode" data-mode="measure" title="Measure a distance (M)">📏 Measure</button>
+  </div>
+
+  <div class="top-actions">
+    <button class="icon-btn" data-act="undo" title="Undo (Ctrl+Z)">↶</button>
+    <button class="icon-btn" data-act="redo" title="Redo (Ctrl+Shift+Z)">↷</button>
+    <button class="chip-btn" id="checksBtn" data-act="reports" data-tab="checks" title="Plan checks"></button>
+    <button class="btn" data-act="reports" data-tab="cables">Reports</button>
+    <button class="btn" data-act="projects">Projects</button>
+    <button class="icon-btn only-narrow" data-act="toggle-right" title="Details">ⓘ</button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="panel left" id="leftPanel">
+    <nav class="tabs" role="tablist">
+      <button class="tab" data-act="left-tab" data-tab="venue">Venue</button>
+      <button class="tab" data-act="left-tab" data-tab="kit">Kit</button>
+      <button class="tab" data-act="left-tab" data-tab="crew">Crew</button>
+    </nav>
+    <div class="panel-body" id="leftBody"></div>
+  </aside>
+
+  <section class="stage-wrap" id="stageWrap">
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="hatch" patternUnits="userSpaceOnUse" width="0.4" height="0.4" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="0.4" class="hatch-line"></line>
+        </pattern>
+      </defs>
+      <g id="L-bg"></g>
+      <g id="L-grid"></g>
+      <g id="L-shapes"></g>
+      <g id="L-fov"></g>
+      <g id="L-cables"></g>
+      <g id="L-items"></g>
+      <g id="L-over"></g>
+    </svg>
+    <div class="hint" id="hint"></div>
+    <div class="zoom-ctrls">
+      <button class="icon-btn" data-act="zoom" data-z="1.25" title="Zoom in">＋</button>
+      <button class="icon-btn" data-act="zoom" data-z="0.8" title="Zoom out">－</button>
+      <button class="icon-btn" data-act="fit" title="Fit venue">⤢</button>
+    </div>
+  </section>
+
+  <aside class="panel right" id="rightPanel">
+    <div class="panel-body" id="inspector"></div>
+  </aside>
+</main>
+
+<div class="popover hidden" id="popover"></div>
+
+<div class="modal hidden" id="modal" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="modalTitle"></h2>
+      <button class="icon-btn" data-act="close-modal" title="Close">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="printRoot"></div>
+
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+<input type="file" id="bgFile" accept="image/*" hidden>
+
+<script src="catalog.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
