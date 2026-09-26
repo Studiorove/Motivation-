@@ -466,7 +466,16 @@ p { margin: 6px 0; line-height: 1.4; }
 .warn-dot { fill: var(--bad); stroke: #0b0b10 !important; }
 
 .handle { fill: #fff; stroke: var(--accent); stroke-width: 2px; vector-effect: non-scaling-stroke; cursor: nwse-resize; }
-.handle.aim { fill: var(--warn); stroke: #fff; cursor: crosshair; }
+.handle.aim { fill: #7dd3fc; stroke: #fff; cursor: crosshair; pointer-events: none; }
+.handle.zoomh { fill: var(--accent); stroke: #fff; pointer-events: none; }
+.handle-hit { fill: transparent; stroke: none; cursor: grab; }
+.spin-hit { fill: transparent; stroke: none; cursor: grab; }
+.h-lbl { fill: #c7c7ff; font-weight: 700; paint-order: stroke; stroke: #0b0b10; stroke-linejoin: round; pointer-events: none; }
+.item.locked { cursor: default; }
+.insp-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.lock-btn { flex: none; font-size: 15px; }
+.lock-btn.on { border-color: var(--warn); background: #3a2a0c; }
+.lock-row { margin: 10px 0 0; }
 .handle.wp { cursor: move; fill: var(--accent); stroke: #fff; }
 .create-box { fill: #6c6cff22; stroke: var(--accent); stroke-dasharray: 5 4; stroke-width: 1.5px; vector-effect: non-scaling-stroke; pointer-events: none; }
 .m-line { stroke: #fff; stroke-width: 1.5px; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; pointer-events: none; }

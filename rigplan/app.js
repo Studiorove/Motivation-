@@ -754,10 +754,10 @@ function buildScene(s, opts = {}) {
     const body = itemIcon(it);
     const person = it.operatorId && personById(it.operatorId);
     const warn = !opts.print && A.unpowered.has(it.id) ? `<circle class="warn-dot" cx="0.34" cy="-0.3" r="0.09"></circle>` : "";
-    out.items += `<g class="item${isSel ? " sel" : ""}${isPending ? " pending" : ""}" data-k="item" data-id="${it.id}" transform="translate(${it.x} ${it.y})">
+    out.items += `<g class="item${isSel ? " sel" : ""}${isPending ? " pending" : ""}${it.locked ? " locked" : ""}" data-k="item" data-id="${it.id}" transform="translate(${it.x} ${it.y})">
       <circle class="sel-ring" r="0.55"></circle>
       <g transform="rotate(${it.rot})">${body}</g>${warn}
-      <text class="i-lbl" ${halo} y="${0.35 + fs * 0.9}" font-size="${fs}" text-anchor="middle">${esc(it.label)}</text>
+      <text class="i-lbl" ${halo} y="${0.35 + fs * 0.9}" font-size="${fs}" text-anchor="middle">${esc(it.label)}${it.locked && isSel ? " 🔒" : ""}</text>
       ${person ? `<text class="i-op" ${halo} y="${0.35 + fs * 1.9}" font-size="${fs * 0.8}" text-anchor="middle">${esc(person.name)}</text>` : ""}</g>`;
   }
 
@@ -774,7 +774,20 @@ function buildScene(s, opts = {}) {
   if (obj && sel.k === "item" && def(obj).camera && P.showFov) {
     const ci = camInfo(obj);
     const tx = obj.x + ci.range * Math.cos(obj.rot * RAD), ty = obj.y + ci.range * Math.sin(obj.rot * RAD);
-    out.over += `<circle class="handle aim" data-k="aim" cx="${tx}" cy="${ty}" r="${hr * 1.3}"></circle>`;
+    // Big invisible hit areas so fingers grab the handle, not what's under it.
+    const hit = Math.max(hr * 1.4, 22 / s);
+    const a = ci.hfov / 2;
+    const ex = obj.x + ci.range * Math.cos(obj.rot * RAD + a), ey = obj.y + ci.range * Math.sin(obj.rot * RAD + a);
+    // Turning area = the cone minus the camera body, so the camera itself can still be dragged.
+    const ri = Math.min(0.7, ci.range * 0.5), R0 = obj.rot * RAD;
+    const P = (r, t) => `${obj.x + r * Math.cos(t)} ${obj.y + r * Math.sin(t)}`;
+    const cone = `M${P(ri, R0 - a)} L${P(ci.range, R0 - a)} A${ci.range} ${ci.range} 0 0 1 ${P(ci.range, R0 + a)} L${P(ri, R0 + a)} A${ri} ${ri} 0 0 0 ${P(ri, R0 - a)} Z`;
+    out.over += `<path class="spin-hit" data-k="spin" d="${cone}"></path>
+      <circle class="handle-hit" data-k="zoom" cx="${ex}" cy="${ey}" r="${hit}"></circle>
+      <circle class="handle zoomh" cx="${ex}" cy="${ey}" r="${hr * 1.1}"></circle>
+      <circle class="handle-hit" data-k="aim" cx="${tx}" cy="${ty}" r="${hit}"></circle>
+      <circle class="handle aim" cx="${tx}" cy="${ty}" r="${hr * 1.3}"></circle>
+      <text class="h-lbl" ${halo} x="${ex}" y="${ey - hr * 2}" font-size="${fs * 0.75}" text-anchor="middle">${r1(ci.f)}mm</text>`;
   }
   if (obj && sel.k === "cable") {
     obj.points.forEach((p, i) => {
@@ -884,6 +897,7 @@ function fCheck(label, path, val) {
 function fRange(path, val, min, max, step) {
   return `<input type="range" class="range" data-f="${path}" data-t="num" value="${val}" min="${min}" max="${max}" step="${step}">`;
 }
+const lockBtn = o => `<button class="icon-btn lock-btn${o.locked ? " on" : ""}" data-act="toggle-lock-obj" title="${o.locked ? "Locked - tap to unlock (L)" : "Lock in place (L)"}" aria-pressed="${!!o.locked}">${o.locked ? "🔒" : "🔓"}</button>`;
 const portChip = type => `<span class="pchip" style="--c:${CABLE_TYPES[type].color}">${CABLE_TYPES[type].abbr}</span>`;
 const levelIcon = l => (l === "error" ? "⛔" : l === "warn" ? "⚠️" : "ℹ️");
 
@@ -932,7 +946,7 @@ function inspectPlan() {
     </div>
     <p class="muted small">Ask the venue which sockets share a breaker, then set each wall socket's circuit.</p>
     <h4>Shortcuts</h4>
-    <p class="muted small">V select · C cable · M measure · Del delete · Ctrl+D duplicate · R / Shift+R rotate · arrows nudge · Esc cancel · Space+drag or right-drag to pan · scroll to zoom</p>
+    <p class="muted small">V select · C cable · M measure · Del delete · Ctrl+D duplicate · R / Shift+R rotate · L lock · arrows nudge · Esc cancel · Space+drag or right-drag to pan · scroll to zoom</p>
   </div>`;
 }
 
@@ -946,7 +960,7 @@ function inspectItem(it) {
   const P = project;
   let h = `<div class="insp-head"><span class="cat-dot" style="--c:${CAT[d.cat].color}"></span><div>
     <input class="title-in" type="text" data-f="label" data-t="text" value="${esc(it.label)}" aria-label="Label">
-    <p class="muted small">${esc(d.name)}</p></div></div>`;
+    <p class="muted small">${esc(d.name)}</p></div>${lockBtn(it)}</div>`;
   if (d.note) h += `<p class="note">${esc(d.note)}</p>`;
 
   const crewOpts = [["", d.role ? `- unassigned -` : "- none -"], ...P.crew.map(p => [p.id, `${p.name || "Unnamed"}${p.role ? " (" + p.role + ")" : ""}`])];
@@ -1009,7 +1023,7 @@ function inspectItem(it) {
 
 function inspectShape(sh) {
   const kinds = Object.entries(SHAPE_KINDS).filter(([k]) => k !== "label").map(([k, v]) => [k, v.name]);
-  let h = `<h3>${esc(SHAPE_KINDS[sh.kind].name)}</h3>`;
+  let h = `<div class="insp-title"><h3>${esc(SHAPE_KINDS[sh.kind].name)}</h3>${lockBtn(sh)}</div>`;
   h += fText("Label", "label", sh.label, "Shown on the plan and in reports");
   if (sh.kind === "label") {
     h += fNum("Text size", "size", sh.size ?? "", { unit: "m", step: 0.1, min: 0.1, t: "numOrNull", ph: "auto" });
@@ -1018,7 +1032,6 @@ function inspectShape(sh) {
     h += fSel("Type", "kind", sh.kind, kinds);
     h += `<div class="row2">${fNum("Width", "w", r2(sh.w), { unit: "m", min: 0.1 })}${fNum("Depth", "h", r2(sh.h), { unit: "m", min: 0.1 })}</div>`;
     h += `<div class="row3">${fNum("Centre X", "x", r2(sh.x), { unit: "m" })}${fNum("Centre Y", "y", r2(sh.y), { unit: "m" })}${fNum("Rotate", "rot", sh.rot, { unit: "°", step: 15 })}</div>`;
-    h += fCheck("Lock position (stops accidental drags)", "locked", sh.locked);
     h += `<p class="muted small">Drag the square handle to resize.</p>`;
     h += inspectHazard(sh);
   }
@@ -1121,6 +1134,11 @@ function renderVenueTab() {
   return `<div data-scope="project">
     <p class="muted small">Pick a tool, then drag on the plan. Tip: trace over a venue floor plan image.</p>
     <div class="tools">${tools}</div>
+    <div class="insp-actions tight lock-row">
+      <button class="btn sm" data-act="lock-layout" data-on="1">🔒 Lock venue layout</button>
+      <button class="btn sm" data-act="lock-layout" data-on="0">Unlock all</button>
+    </div>
+    <p class="muted small">Locked shapes can't be dragged by accident - dragging them pans the plan. Tap one to select it.</p>
     <h4>Venue size</h4>
     <div class="row2">${fNum("Width", "venue.w", P.venue.w, { unit: "m", min: 2, step: 1 })}${fNum("Depth", "venue.h", P.venue.h, { unit: "m", min: 2, step: 1 })}</div>
     <div class="row2">${fSel("Snap", "grid", P.snap ? P.grid : 0, [[0, "Off"], [0.1, "10cm"], [0.25, "25cm"], [0.5, "50cm"], [1, "1m"]], "grid")}</div>
@@ -1655,17 +1673,30 @@ svg.addEventListener("pointerdown", e => {
     drag = { ...start, type: "resize", id: obj.id };
   } else if (hit.k === "aim" && obj) {
     drag = { ...start, type: "aim", id: obj.id };
+  } else if (hit.k === "zoom" && obj) {
+    drag = { ...start, type: "zoom", id: obj.id };
+  } else if (hit.k === "spin" && obj) {
+    // Dragging inside the selected camera's view turns it; a plain tap falls through.
+    drag = { ...start, type: "spin", id: obj.id, x: e.clientX, y: e.clientY };
   } else if (hit.k === "wp" && obj) {
     drag = { ...start, type: "wp", id: obj.id, i: +hit.i };
   } else if (hit.k === "item") {
     const it = itemById(hit.id);
-    if (!(sel?.k === "item" && sel.id === it.id)) select("item", it.id);
-    drag = { ...start, type: "move", k: "item", id: it.id, dx: w.x - it.x, dy: w.y - it.y };
+    if (it.locked) {
+      drag = { ...start, type: "pan", vx: view.x, vy: view.y, tapSelect: { k: "item", id: it.id } };
+    } else {
+      if (!(sel?.k === "item" && sel.id === it.id)) select("item", it.id);
+      drag = { ...start, type: "move", k: "item", id: it.id, dx: w.x - it.x, dy: w.y - it.y };
+    }
   } else if (hit.k === "shape") {
     const sh = project.shapes.find(s => s.id === hit.id);
-    if (!(sel?.k === "shape" && sel.id === sh.id)) select("shape", sh.id);
-    drag = sh.locked ? { ...start, type: "pan", vx: view.x, vy: view.y }
-      : { ...start, type: "move", k: "shape", id: sh.id, dx: w.x - sh.x, dy: w.y - sh.y };
+    if (sh.locked) {
+      // Locked: dragging pans the plan; only a clean tap selects it.
+      drag = { ...start, type: "pan", vx: view.x, vy: view.y, tapSelect: { k: "shape", id: sh.id } };
+    } else {
+      if (!(sel?.k === "shape" && sel.id === sh.id)) select("shape", sh.id);
+      drag = { ...start, type: "move", k: "shape", id: sh.id, dx: w.x - sh.x, dy: w.y - sh.y };
+    }
   } else if (hit.k === "cable") {
     select("cable", hit.id);
     drag = { ...start, type: "pan", vx: view.x, vy: view.y };
@@ -1723,6 +1754,17 @@ window.addEventListener("pointermove", e => {
     const it = itemById(drag.id);
     it.rot = Math.round(Math.atan2(w.y - it.y, w.x - it.x) / RAD);
     it.props.range = Math.max(0.5, r1(Math.hypot(w.x - it.x, w.y - it.y)));
+  } else if (drag.type === "zoom") {
+    // The cone edge follows the finger: half the view angle -> focal length.
+    const it = itemById(drag.id);
+    const ci = camInfo(it);
+    let diff = Math.atan2(w.y - it.y, w.x - it.x) - it.rot * RAD;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    const half = clamp(Math.abs(diff), 0.2 * RAD, 85 * RAD);
+    it.props.focal = r1(clamp(ci.sw / (2 * Math.tan(half)), ci.fmin, ci.fmax));
+  } else if (drag.type === "spin") {
+    const it = itemById(drag.id);
+    it.rot = Math.round(Math.atan2(w.y - it.y, w.x - it.x) / RAD);
   } else if (drag.type === "wp") {
     const c = project.cables.find(x => x.id === drag.id);
     c.points[drag.i] = snapP(w);
@@ -1746,7 +1788,15 @@ window.addEventListener("pointerup", e => {
     if (d.kind === "room" && !d.moved) toast(`Added a ${k.w}×${k.h}m room - drag its corner handle to resize.`);
     return;
   }
-  if (["move", "resize", "aim", "wp"].includes(d.type) && d.moved) {
+  if (d.type === "pan" && !d.moved && d.tapSelect) return select(d.tapSelect.k, d.tapSelect.id);
+  if (d.type === "spin" && !d.moved) {
+    // A tap inside the cone: select whatever is underneath it.
+    const under = document.elementsFromPoint(d.x, d.y).map(el => el.closest?.("[data-k]")).find(el => el && ["item", "shape", "cable"].includes(el.dataset.k));
+    if (under) select(under.dataset.k, under.dataset.id);
+    else select(null);
+    return;
+  }
+  if (["move", "resize", "aim", "wp", "zoom", "spin"].includes(d.type) && d.moved) {
     pushUndo(d.before);
     scheduleSave();
     renderInspector();
@@ -1878,10 +1928,12 @@ window.addEventListener("keydown", e => {
   if (k === "v") return setMode("select");
   if (k === "c") return setMode("cable");
   if (k === "m") return setMode("measure");
+  if (k === "l" && obj && sel.k !== "cable") return ACTIONS["toggle-lock-obj"]();
+  const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  if ((k === "r" || arrows[e.key]) && obj?.locked) { e.preventDefault(); return toast("It's locked - unlock it (🔒) to move it."); }
   if (k === "r" && obj && sel.k !== "cable") {
     return mutate(() => { obj.rot = ((obj.rot + (e.shiftKey ? -15 : 15)) % 360 + 360) % 360; if (obj.rot > 180) obj.rot -= 360; });
   }
-  const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
   if (arrows[e.key] && obj && sel.k !== "cable") {
     e.preventDefault();
     const step = e.shiftKey ? 1 : project.grid || 0.1;
@@ -1997,6 +2049,17 @@ const ACTIONS = {
   "close-drawers": () => { document.body.classList.remove("show-left"); if (sheetState() === "full") setSheet(sel ? "peek" : null); },
   "sheet-toggle": () => setSheet(sheetState() === "full" ? "peek" : "full"),
   "sheet-close": () => setSheet(null),
+  "toggle-lock-obj": () => {
+    const o = selectedObj();
+    if (!o || sel.k === "cable") return;
+    mutate(() => { o.locked = !o.locked; });
+    toast(o.locked ? `${o.label || "It"} is locked - drags now pan the plan.` : `${o.label || "It"} is unlocked.`);
+  },
+  "lock-layout": b => {
+    const on = b.dataset.on === "1";
+    mutate(() => project.shapes.forEach(s => { s.locked = on; }));
+    toast(on ? "Venue layout locked - room, stage and zones won't move." : "Venue layout unlocked.");
+  },
   zoom: b => { const r = svg.getBoundingClientRect(); zoomAt(+b.dataset.z, r.left + r.width / 2, r.top + r.height / 2); },
   fit: fitView,
   "add-item": b => {
@@ -2225,7 +2288,7 @@ function buildExample() {
   project = newProject("Example: conference livestream");
   const P = project;
   P.venue = { w: 26, h: 19 };
-  const S = (kind, x, y, w, h, label) => { const s = { id: uid(), kind, x, y, w, h, rot: 0, label: label ?? SHAPE_KINDS[kind].label, locked: kind === "room", treatment: "none" }; P.shapes.push(s); return s; };
+  const S = (kind, x, y, w, h, label) => { const s = { id: uid(), kind, x, y, w, h, rot: 0, label: label ?? SHAPE_KINDS[kind].label, locked: true, treatment: "none" }; P.shapes.push(s); return s; };
   S("room", 13, 9.5, 24, 17, "Main hall");
   S("stage", 13, 3, 10, 3, "Stage");
   S("seating", 8.5, 10, 7, 6, "Seating L");
