@@ -374,27 +374,71 @@ p { margin: 6px 0; line-height: 1.4; }
 .sh-text { fill: #b0b0c0; font-weight: 600; }
 .shape.sel .sh-text { fill: var(--accent); }
 
-.fov { fill: #f5a52414; stroke: #f5a52466; stroke-width: 1px; vector-effect: non-scaling-stroke; pointer-events: none; }
-.fov-axis { stroke: #f5a52455; stroke-width: 1px; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; pointer-events: none; }
-.fov-txt { fill: #f5a524; font-weight: 700; paint-order: stroke; stroke: #0b0b10; stroke-linejoin: round; pointer-events: none; }
+.fov { fill: #7dd3fc12; stroke: #7dd3fc66; stroke-width: 1px; vector-effect: non-scaling-stroke; pointer-events: none; }
+.fov-axis { stroke: #7dd3fc55; stroke-width: 1px; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; pointer-events: none; }
+.fov-txt { fill: #7dd3fc; font-weight: 700; paint-order: stroke; stroke: #0b0b10; stroke-linejoin: round; pointer-events: none; }
 
 .cable { cursor: pointer; }
 .c-hit { fill: none; stroke: transparent; stroke-width: 14px; vector-effect: non-scaling-stroke; }
 .c-line { fill: none; stroke-width: 2.5px; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
 .c-glow { fill: none; stroke: #fff; stroke-opacity: 0.35; stroke-width: 7px; vector-effect: non-scaling-stroke; stroke-linejoin: round; pointer-events: none; }
 .cable.st-error .c-line { stroke-dasharray: 8 5; }
+.cable.k-power .c-line { stroke-width: 3.5px; }
+.cable.dim .c-line { opacity: 0.15; transition: opacity 0.12s; }
+.cable.dim.st-error .c-line, .cable.dim.st-warn .c-line { opacity: 0.4; }
+.cable.on .c-line { stroke-width: 3px; }
+.cable.on.k-power .c-line { stroke-width: 4.5px; }
+.b-line { vector-effect: non-scaling-stroke; stroke-linecap: round; pointer-events: none; opacity: 0.9; }
+.b-count { fill: #fff; font-weight: 700; paint-order: stroke; stroke: #0b0b10; stroke-linejoin: round; pointer-events: none; }
+
+.cable-legend {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  background: #000c;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  width: 206px;
+  z-index: 5;
+}
+.cable-legend:has(> .lg-toggle:only-child) { width: auto; padding: 0; }
+.lg-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 6px; }
+.lg-toggle { background: none; border: none; color: var(--dim); padding: 6px 10px; font-size: 12px; }
+.lg-head .lg-toggle { padding: 0 4px; }
+.seg { display: flex; background: var(--card); border-radius: 8px; padding: 2px; margin-bottom: 6px; }
+.seg button { flex: 1; border: none; background: none; color: var(--dim); border-radius: 6px; padding: 4px 0; font-size: 11px; }
+.seg button.on { background: var(--accent); color: #fff; }
+.lg-row { display: flex; align-items: center; gap: 7px; padding: 3px 0; cursor: pointer; }
+.lg-row em { margin-left: auto; font-style: normal; color: var(--dim); }
+.sw-set { display: inline-flex; flex-direction: column; gap: 2px; width: 16px; }
+.sw-set i { display: block; height: 3px; border-radius: 2px; }
+.sw-set i.k-power { height: 5px; }
+
+.clist { list-style: none; margin: 0; padding: 0; }
+.clist.hidden-group { opacity: 0.55; }
+.crow { display: flex; align-items: center; gap: 7px; padding: 6px 6px; border-radius: 8px; cursor: pointer; font-size: 12px; }
+.crow:hover { background: var(--card); }
+.crow.on { background: #26264a; }
+.crow .c-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.crow .c-main span { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crow .c-len { color: var(--dim); font-variant-numeric: tabular-nums; }
+.stat { width: 14px; text-align: center; font-size: 12px; }
+.stat.ok { color: var(--good); }
+.stat.warn { color: var(--warn); }
+.stat.bad { color: var(--bad); }
 .cable.st-warn .c-line { stroke-dasharray: 14 4; }
 .c-lbl { pointer-events: none; font-weight: 600; paint-order: stroke; stroke: #0b0b10; stroke-linejoin: round; }
 .c-preview { fill: none; stroke-width: 2px; stroke-dasharray: 6 5; vector-effect: non-scaling-stroke; pointer-events: none; }
 
 .item { cursor: move; }
-.item rect, .item circle, .item path { vector-effect: non-scaling-stroke; stroke-width: 1.5px; }
+.item rect, .item circle, .item path, .item line { vector-effect: non-scaling-stroke; stroke-width: 1.5px; stroke-linecap: round; }
 .item .sel-ring { fill: none; stroke: none; }
 .item.sel .sel-ring { stroke: var(--accent); stroke-width: 2px; fill: #6c6cff18; }
 .item.pending .sel-ring { stroke: var(--good); stroke-width: 2px; stroke-dasharray: 4 3; }
 .i-lbl { fill: var(--text); font-weight: 700; paint-order: stroke; stroke: #0b0b10; stroke-linejoin: round; pointer-events: none; }
 .i-op { fill: #9ea0ff; paint-order: stroke; stroke: #0b0b10; stroke-linejoin: round; pointer-events: none; }
-.glyph { font-weight: 800; pointer-events: none; }
 .warn-dot { fill: var(--bad); stroke: #0b0b10 !important; }
 
 .handle { fill: #fff; stroke: var(--accent); stroke-width: 2px; vector-effect: non-scaling-stroke; cursor: nwse-resize; }
@@ -655,7 +699,22 @@ table .cell.wide { width: 100%; min-width: 180px; }
   .print-svg.light .i-lbl { fill: #111; stroke: #fff; }
   .print-svg.light .i-op { fill: #4b4bc8; stroke: #fff; }
   .print-svg.light .c-lbl { stroke: #fff; }
-  .print-svg.light .fov { fill: #f5a52418; stroke: #d08a10; }
+  .print-svg.light .fov { fill: #0284c710; stroke: #0284c7aa; }
+  .print-svg.light .fov-axis { stroke: #0284c755; }
+  .print-svg.light .k-power .c-line, .print-svg.light .b-line.k-power { stroke: #111; }
+  .print-svg.light .k-xlr .c-line, .print-svg.light .b-line.k-xlr { stroke: #d4a106; }
+  .print-svg.light .c-lbl.k-power { fill: #111; }
+  .print-svg.light .c-lbl.k-xlr, .print-svg.light .c-lbl.k-mini, .print-svg.light .c-lbl.k-trs { fill: #8a6a00; }
+  .print-svg.light .c-lbl, .print-svg.light .b-count { stroke: #fff; }
+  .print-svg.light .b-count { fill: #111; }
+  /* Pale category colours need more contrast on paper. */
+  .print-svg.light .item [stroke="#7dd3fc"] { stroke: #0284c7; }
+  .print-svg.light .item [stroke="#22d3ee"] { stroke: #0891b2; }
+  .print-svg.light .item [stroke="#d4d4d8"] { stroke: #3f3f46; }
+  .print-svg.light .item [fill="#7dd3fc"] { fill: #0284c7; }
+  .print-svg.light .item [fill="#22d3ee"] { fill: #0891b2; }
+  .print-svg.light .item [fill="#d4d4d8"] { fill: #3f3f46; }
+  .lg i.k-power { background: #111 !important; height: 5px !important; }
   .legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 6px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .lg { display: inline-flex; align-items: center; gap: 5px; }
   .lg i { width: 18px; height: 4px; display: inline-block; }

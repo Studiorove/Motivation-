@@ -5,15 +5,15 @@
 // (passive cable, no extenders). `stock` is the lengths you'd pull from a
 // cable store; planned runs are rounded up to the next stock length.
 const CABLE_TYPES = {
-  sdi:   { name: "SDI (BNC)",       abbr: "SDI",  color: "#f5a524", warn: 70, max: 100, stock: [1, 2, 5, 10, 15, 20, 30, 50, 75, 100] },
-  hdmi:  { name: "HDMI",            abbr: "HDMI", color: "#4aa3ff", warn: 10, max: 15,  stock: [1, 2, 3, 5, 10, 15] },
-  xlr:   { name: "XLR audio",       abbr: "XLR",  color: "#e05ad6", warn: 80, max: 100, stock: [1, 2, 3, 5, 10, 15, 20, 30, 50], family: "audio" },
-  trs:   { name: '1/4" jack',       abbr: "JACK", color: "#c77dff", warn: 10, max: 20,  stock: [1, 2, 3, 5, 10], family: "audio" },
-  mini:  { name: "3.5mm jack",      abbr: "3.5",  color: "#a78bfa", warn: 5,  max: 10,  stock: [1, 2, 3, 5, 10], family: "audio" },
-  eth:   { name: "Ethernet (Cat6)", abbr: "NET",  color: "#3ad68a", warn: 90, max: 100, stock: [1, 2, 3, 5, 10, 15, 20, 30, 50, 100] },
-  usb:   { name: "USB",             abbr: "USB",  color: "#9aa0ae", warn: 3,  max: 5,   stock: [1, 2, 3, 5] },
+  sdi:   { name: "SDI (BNC)",       abbr: "SDI",  color: "#ef4444", warn: 70, max: 100, stock: [1, 2, 5, 10, 15, 20, 30, 50, 75, 100] },
+  hdmi:  { name: "HDMI",            abbr: "HDMI", color: "#fb923c", warn: 10, max: 15,  stock: [1, 2, 3, 5, 10, 15] },
+  xlr:   { name: "XLR audio",       abbr: "XLR",  color: "#facc15", warn: 80, max: 100, stock: [1, 2, 3, 5, 10, 15, 20, 30, 50], family: "audio" },
+  trs:   { name: '1/4" jack',       abbr: "JACK", color: "#eab308", warn: 10, max: 20,  stock: [1, 2, 3, 5, 10], family: "audio" },
+  mini:  { name: "3.5mm jack",      abbr: "3.5",  color: "#fde047", warn: 5,  max: 10,  stock: [1, 2, 3, 5, 10], family: "audio" },
+  eth:   { name: "Ethernet (Cat6)", abbr: "NET",  color: "#3b82f6", warn: 90, max: 100, stock: [1, 2, 3, 5, 10, 15, 20, 30, 50, 100] },
+  usb:   { name: "USB",             abbr: "USB",  color: "#94a3b8", warn: 3,  max: 5,   stock: [1, 2, 3, 5] },
   com:   { name: "Intercom (XLR)",  abbr: "COM",  color: "#f472b6", warn: 150, max: 300, stock: [5, 10, 20, 30, 50, 100] },
-  power: { name: "Mains power",     abbr: "PWR",  color: "#ff5b4a", warn: 40, max: 50,  stock: [2, 5, 10, 15, 25, 50] }
+  power: { name: "Mains power",     abbr: "PWR",  color: "#d4d4d8", warn: 40, max: 50,  stock: [2, 5, 10, 15, 25, 50] }
 };
 
 // Crew roles, in rough order of seniority on a call sheet.
@@ -31,15 +31,15 @@ const ROLES = [
 ];
 
 const CATEGORIES = [
-  { id: "camera",  name: "Cameras",           color: "#f5a524" },
-  { id: "switch",  name: "Vision mixers",     color: "#6c6cff" },
-  { id: "audio",   name: "Audio",             color: "#e05ad6" },
-  { id: "gfx",     name: "Graphics & playback", color: "#22d3ee" },
-  { id: "stream",  name: "Streaming & network", color: "#3ad68a" },
-  { id: "display", name: "Monitors & displays", color: "#4aa3ff" },
-  { id: "convert", name: "Converters",        color: "#9aa0ae" },
+  { id: "camera",  name: "Cameras",           color: "#7dd3fc" },
+  { id: "switch",  name: "Vision mixers",     color: "#a78bfa" },
+  { id: "audio",   name: "Audio",             color: "#22d3ee" },
+  { id: "gfx",     name: "Graphics & playback", color: "#e879f9" },
+  { id: "stream",  name: "Streaming & network", color: "#34d399" },
+  { id: "display", name: "Monitors & displays", color: "#818cf8" },
+  { id: "convert", name: "Converters",        color: "#9ca3af" },
   { id: "comms",   name: "Comms",             color: "#f472b6" },
-  { id: "power",   name: "Power",             color: "#ff5b4a" }
+  { id: "power",   name: "Power",             color: "#d4d4d8" }
 ];
 
 // Port-list helper: ports("sdi", "out", 2, "SDI Out") ->

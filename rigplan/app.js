@@ -125,6 +125,8 @@ function migrateFields(p) {
     showFov: p.showFov ?? true,
     showCableLabels: p.showCableLabels ?? true,
     showGrid: p.showGrid ?? true,
+    cableView: ["focus", "all", "bundle"].includes(p.cableView) ? p.cableView : "focus",
+    cableShow: { video: true, audio: true, data: true, power: true, ...(p.cableShow || {}) },
     circuits: p.circuits?.length ? p.circuits : [{ id: uid(), name: "Circuit A", amps: REGIONS[region].circuitA }],
     shapes: p.shapes || [],
     items: p.items || [],
@@ -518,6 +520,7 @@ function select(k, id) {
   sel = k ? { k, id } : null;
   renderCanvas();
   renderInspector();
+  if (leftTab === "cables") renderLeft();
   if (sel && isNarrow()) document.body.classList.add("show-right");
 }
 const isNarrow = () => window.matchMedia("(max-width: 900px)").matches;
@@ -607,9 +610,11 @@ function fitView() {
   const r = svg.getBoundingClientRect();
   if (!r.width) return;
   const { w, h } = project.venue;
-  const s = Math.min(r.width / (w + 2), r.height / (h + 2));
+  // Leave room for the cable legend in the top-left corner when it's open.
+  const left = legendOpen && r.width > 700 ? 230 : 0;
+  const s = Math.min((r.width - left) / (w + 2), r.height / (h + 2));
   view.s = clamp(s, 2, 400);
-  view.x = w / 2 - r.width / view.s / 2;
+  view.x = w / 2 - (r.width + left) / view.s / 2;
   view.y = h / 2 - r.height / view.s / 2;
   renderCanvas();
 }
@@ -687,22 +692,7 @@ function buildScene(s, opts = {}) {
   }
 
   // Cables
-  for (const c of P.cables) {
-    const info = A.cable[c.id];
-    if (!info) continue;
-    const off = A.offset[c.id] || 0;
-    const pts = cablePath(c).map(p => ({ x: p.x + off, y: p.y + off }));
-    const d = "M" + pts.map(p => `${r2(p.x)} ${r2(p.y)}`).join(" L");
-    const isSel = !opts.print && sel?.k === "cable" && sel.id === c.id;
-    out.cables += `<g class="cable st-${info.status}${isSel ? " sel" : ""}" data-k="cable" data-id="${c.id}">
-      <path class="c-hit" d="${d}"></path>
-      ${isSel ? `<path class="c-glow" d="${d}"></path>` : ""}
-      <path class="c-line" d="${d}" stroke="${info.info.color}"></path></g>`;
-    if (P.showCableLabels) {
-      const m = pointAlong(pts, 0.5);
-      out.cables += `<text class="c-lbl" ${halo} x="${m.x}" y="${m.y - fs * 0.3}" font-size="${fs * 0.75}" text-anchor="middle" fill="${info.info.color}">${esc(c.label)} · ${info.stock ? info.stock + "m" : r1(info.planned) + "m"}</text>`;
-    }
-  }
+  out.cables = buildCables(opts, fs, halo);
 
   // Items
   for (const it of P.items) {
@@ -710,16 +700,7 @@ function buildScene(s, opts = {}) {
     const color = CAT[d.cat].color;
     const isSel = !opts.print && sel?.k === "item" && sel.id === it.id;
     const isPending = pendingCable?.from.item === it.id;
-    let body;
-    if (d.camera && it.type.startsWith("cam_ptz")) {
-      body = `<circle r="0.3" fill="${color}33" stroke="${color}"></circle><rect x="0.18" y="-0.09" width="0.26" height="0.18" fill="${color}"></rect>`;
-    } else if (d.camera) {
-      body = `<rect x="-0.35" y="-0.2" width="0.55" height="0.4" rx="0.05" fill="${color}33" stroke="${color}"></rect><path d="M0.2 -0.08 L0.42 -0.18 L0.42 0.18 L0.2 0.08 Z" fill="${color}"></path>`;
-    } else if (d.cat === "power") {
-      body = `<rect x="-0.3" y="-0.18" width="0.6" height="0.36" rx="0.06" fill="${color}22" stroke="${color}"></rect><text class="glyph" font-size="0.26" text-anchor="middle" dominant-baseline="central" fill="${color}">⚡</text>`;
-    } else {
-      body = `<rect x="-0.4" y="-0.26" width="0.8" height="0.52" rx="0.08" fill="${color}33" stroke="${color}"></rect><text class="glyph" font-size="0.2" text-anchor="middle" dominant-baseline="central" fill="${color}">${esc(d.short)}</text>`;
-    }
+    const body = itemIcon(it);
     const person = it.operatorId && personById(it.operatorId);
     const warn = !opts.print && A.unpowered.has(it.id) ? `<circle class="warn-dot" cx="0.34" cy="-0.3" r="0.09"></circle>` : "";
     out.items += `<g class="item${isSel ? " sel" : ""}${isPending ? " pending" : ""}" data-k="item" data-id="${it.id}" transform="translate(${it.x} ${it.y})">
@@ -784,6 +765,7 @@ function renderCanvas() {
   $("#L-items").innerHTML = sc.items;
   $("#L-over").innerHTML = sc.over;
   svg.dataset.mode = mode.startsWith("shape:") ? "shape" : mode;
+  renderLegend();
   renderTopbar();
   renderHint();
 }
@@ -1069,6 +1051,14 @@ function renderLeft() {
     body.innerHTML = renderKitTab(q);
     const inp = $("#kitSearch");
     if (q) { inp.focus(); inp.setSelectionRange(q.length, q.length); }
+  } else if (leftTab === "cables") {
+    const q = $("#cableSearch")?.value || "";
+    const focused = document.activeElement?.id === "cableSearch";
+    const scroll = body.scrollTop;
+    body.innerHTML = renderCablesTab(q);
+    body.scrollTop = scroll;
+    const inp = $("#cableSearch");
+    if (focused) { inp.focus(); inp.setSelectionRange(q.length, q.length); }
   } else body.innerHTML = renderCrewTab();
 }
 
@@ -1341,7 +1331,7 @@ function printPlan() {
     <g>${bg}</g><g>${sc.grid}</g><g>${sc.shapes}</g><g>${sc.fov}</g><g>${sc.cables}</g><g>${sc.items}</g></svg>`;
   const legend = [...new Set(project.cables.map(c => A.cable[c.id].kind))].map(k => {
     const i = kindInfo(k);
-    return `<span class="lg"><i style="background:${i.color}"></i>${esc(i.name)}</span>`;
+    return `<span class="lg"><i class="k-${baseType(k)}" style="background:${i.color}"></i>${esc(i.name)}</span>`;
   }).join("");
 
   const title = o.costs !== "none" ? "Proposal" : "Production pack";
@@ -1733,6 +1723,15 @@ svg.addEventListener("wheel", e => {
   }
 }, { passive: false });
 
+// Hovering a row in the cable list highlights that run on the plan.
+$("#leftBody").addEventListener("mouseover", e => {
+  const id = e.target.closest("[data-hover]")?.dataset.hover || null;
+  if (id !== hoverCable) { hoverCable = id; renderCanvas(); }
+});
+$("#leftBody").addEventListener("mouseleave", () => {
+  if (hoverCable) { hoverCable = null; renderCanvas(); }
+});
+
 // Drag kit from the sidebar onto the plan.
 $("#leftBody").addEventListener("dragstart", e => {
   const li = e.target.closest("[data-type]");
@@ -1847,7 +1846,7 @@ function applyInput(el) {
 
 document.addEventListener("input", e => {
   const el = e.target;
-  if (el.id === "kitSearch") { renderLeft(); return; }
+  if (el.id === "kitSearch" || el.id === "cableSearch") { renderLeft(); return; }
   if (el.id === "projName") { project.name = el.value; scheduleSave(); return; }
   if (!el.dataset?.f) return;
   if (!applyInput(el)) return;
@@ -1884,6 +1883,8 @@ const ACTIONS = {
   mode: b => setMode(b.dataset.mode === mode && mode.startsWith("shape:") ? "select" : b.dataset.mode),
   undo, redo,
   "left-tab": b => { leftTab = b.dataset.tab; renderLeft(); },
+  "cable-view": b => { project.cableView = b.dataset.v; scheduleSave(); renderCanvas(); },
+  "legend-toggle": () => { legendOpen = !legendOpen; renderLegend(); },
   "toggle-left": () => { document.body.classList.toggle("show-left"); document.body.classList.remove("show-right"); },
   "toggle-right": () => { document.body.classList.toggle("show-right"); document.body.classList.remove("show-left"); },
   zoom: b => { const r = svg.getBoundingClientRect(); zoomAt(+b.dataset.z, r.left + r.width / 2, r.top + r.height / 2); },
@@ -1901,11 +1902,13 @@ const ACTIONS = {
   goto: b => {
     select(b.dataset.k, b.dataset.id);
     const o = selectedObj();
-    if (o && b.dataset.k !== "cable") {
+    if (o) {
+      // Bring it into view if it's off screen (cables: their midpoint).
+      const pt = b.dataset.k === "cable" ? pointAlong(cablePath(o), 0.5) : o;
       const r = svg.getBoundingClientRect();
       const w = worldFromClient(r.left, r.top), w2 = worldFromClient(r.right, r.bottom);
-      if (o.x < w.x || o.x > w2.x || o.y < w.y || o.y > w2.y) {
-        view.x = o.x - (w2.x - w.x) / 2; view.y = o.y - (w2.y - w.y) / 2;
+      if (pt.x < w.x || pt.x > w2.x || pt.y < w.y || pt.y > w2.y) {
+        view.x = pt.x - (w2.x - w.x) / 2; view.y = pt.y - (w2.y - w.y) / 2;
         renderCanvas();
       }
     }
@@ -2172,10 +2175,10 @@ function buildExample() {
   C(lan, "eth_out_1", rtr, "eth_in_1");
   C(rtr, "eth_io_1", enc, "eth_io_1");
   C(ptzc, "eth_io_1", rtr, "eth_io_2");
-  C(cam3, "eth_io_1", rtr, "eth_io_3", [{ x: 24.8, y: 5.5 }]);
+  C(cam3, "eth_io_1", rtr, "eth_io_3", [{ x: 24.7, y: 5.5 }, { x: 24.7, y: 14.5 }]);
   // Intercom
   C(com, "com_io_1", bp1, "com_io_1");
-  C(com, "com_io_2", bp2, "com_io_1", [{ x: 20.9, y: 17.9 }, { x: 1.6, y: 17.9 }]);
+  C(com, "com_io_2", bp2, "com_io_1", [{ x: 20.9, y: 17.5 }, { x: 1.5, y: 17.5 }, { x: 1.5, y: 7.4 }]);
   // Power
   C(wallE, "power_out_1", ps1, "power_in_1");
   C(wallE, "power_out_2", ps2, "power_in_1");
