@@ -15,6 +15,9 @@ const RAD = Math.PI / 180;
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+// Set by hosts that sandbox the page (no print dialog, no file downloads).
+const EMBED = !!window.RIGPLAN_EMBED;
+
 const LEAD_M = 1.8;        // reach of a typical device power lead
 const PARALLEL_GAP = 0.14; // visual spacing between cables that share both ends
 const CAT = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
@@ -1303,6 +1306,13 @@ function downloadCSV(key) {
 }
 const slug = s => (s || "plan").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "plan";
 function downloadFile(name, text, type) {
+  if (EMBED) {
+    // Downloads are blocked here; hand the content over via the clipboard instead.
+    const done = () => toast(`Copied ${name} to the clipboard - paste it into a file or spreadsheet.`, 5000);
+    const fail = () => toast("Couldn't copy here. Use the full web version to download files.", 5000);
+    try { navigator.clipboard.writeText(text).then(done, fail); } catch (e) { fail(); }
+    return;
+  }
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement("a");
   a.href = url; a.download = name;
@@ -1336,7 +1346,7 @@ function renderExport() {
     </div>
     ${company.name || company.logo ? "" : `<p class="note">Add your company name, logo and colour in <button class="link" data-act="company">Company &amp; rates</button> to brand the PDF.</p>`}
     <div class="insp-actions"><button class="btn primary" data-act="do-print">Create PDF</button>
-      <span class="muted small">Opens the print dialog - choose "Save as PDF".</span></div>
+      <span class="muted small">${EMBED ? "Opens a preview of the document." : "Opens a preview, then print or save as PDF."}</span></div>
   </div>`;
 }
 
@@ -1389,9 +1399,12 @@ function printPlan() {
     ${sec(o.terms && company.terms, "Terms", `<p class="terms">${esc(company.terms)}</p>`)}
     <footer class="doc-foot">${esc([company.name, company.contact].filter(Boolean).join(" · "))}</footer>
   </div>`;
-  document.body.classList.add("printing");
-  window.print();
-  setTimeout(() => document.body.classList.remove("printing"), 500);
+  // Show it on screen first; printing (Save as PDF) is offered where the host allows it.
+  $("#previewBar").innerHTML = `<button class="btn" data-act="close-preview">← Back to plan</button>
+    <span>${EMBED ? "Preview only here. To save a PDF, open the full web version on a computer." : "Check the document, then save it as a PDF."}</span>
+    ${EMBED ? "" : `<button class="btn primary" data-act="print-now">Print / Save PDF</button>`}`;
+  document.body.classList.add("previewing");
+  $("#printRoot").scrollTop = 0;
 }
 
 // ---------- Modal, popover, projects ----------------------------------------------------------------
@@ -1776,6 +1789,7 @@ window.addEventListener("keydown", e => {
   if (mod && e.key.toLowerCase() === "y" && !typing) { e.preventDefault(); redo(); return; }
   if (e.key === "Escape") {
     hidePopover();
+    if (document.body.classList.contains("previewing")) return document.body.classList.remove("previewing");
     if (!$("#modal").classList.contains("hidden")) return closeModal();
     if (typing) return document.activeElement.blur();
     if (pendingCable) { pendingCable = null; renderCanvas(); return; }
@@ -1979,6 +1993,8 @@ const ACTIONS = {
   "export-pdf": () => showModal("PDF export", renderExport),
   "export-preset": b => { project.exportOpts = { ...EXPORT_PRESETS[b.dataset.p] }; scheduleSave(); rerenderModal(); },
   "do-print": () => { closeModal(); printPlan(); },
+  "close-preview": () => document.body.classList.remove("previewing"),
+  "print-now": () => window.print(),
   company: openCompany,
   "logo-upload": () => $("#logoFile").click(),
   "logo-clear": () => { company.logo = null; saveCompany(); rerenderModal(); },
@@ -2010,11 +2026,22 @@ const ACTIONS = {
   "del-output": b => { const it = selectedObj(); mutate(() => it.props.outputs.splice(+b.dataset.i, 1)); },
   "close-modal": closeModal,
   projects: openProjects,
-  "new-project": () => { const name = prompt("Name for the new plan:", "New show"); if (name == null) return; switchTo(newProject(name || "New show")); closeModal(); },
+  "new-project": () => {
+    switchTo(newProject("New show"));
+    closeModal();
+    const nm = $("#projName");
+    nm.focus(); nm.select();
+    toast("New plan created - type its name at the top.");
+  },
   "open-project": b => { const p = loadProject(b.dataset.id); if (!p) return toast("Couldn't open that plan"); switchTo(p); closeModal(); },
   "delete-project": b => {
-    const entry = listProjects().find(p => p.id === b.dataset.id);
-    if (!confirm(`Delete "${entry?.name}"? This can't be undone.`)) return;
+    // Two taps: the first arms the button, the second deletes.
+    if (!b.classList.contains("armed")) {
+      $$("#modalBody .armed").forEach(x => { x.classList.remove("armed"); x.textContent = "✕"; });
+      b.classList.add("armed");
+      b.textContent = "Delete?";
+      return;
+    }
     lsDel(keyProject(b.dataset.id));
     lsSet(KEY_INDEX, JSON.stringify(listProjects().filter(p => p.id !== b.dataset.id)));
     openProjects();
