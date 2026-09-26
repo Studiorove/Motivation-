@@ -36,6 +36,7 @@
       <button class="tab" data-act="left-tab" data-tab="kit">Kit</button>
       <button class="tab" data-act="left-tab" data-tab="cables">Cables</button>
       <button class="tab" data-act="left-tab" data-tab="crew">Crew</button>
+      <button class="icon-btn sm only-narrow drawer-close" data-act="close-drawers" title="Close">✕</button>
     </nav>
     <div class="panel-body" id="leftBody"></div>
   </aside>
@@ -64,7 +65,14 @@
     </div>
   </section>
 
+  <div class="scrim" data-act="close-drawers"></div>
+
   <aside class="panel right" id="rightPanel">
+    <div class="sheet-bar" id="sheetBar">
+      <span class="grab" aria-hidden="true"></span>
+      <button class="icon-btn sm" data-act="sheet-toggle" id="sheetToggle" title="Expand">⌃</button>
+      <button class="icon-btn sm" data-act="sheet-close" title="Close">✕</button>
+    </div>
     <div class="panel-body" id="inspector"></div>
   </aside>
 </main>

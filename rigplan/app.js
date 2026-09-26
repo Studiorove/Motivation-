@@ -538,7 +538,41 @@ function select(k, id) {
   renderCanvas();
   renderInspector();
   if (leftTab === "cables") renderLeft();
-  if (sel && isNarrow()) document.body.classList.add("show-right");
+  if (isNarrow()) {
+    if (!sel) setSheet(null);
+    else {
+      if (!document.body.classList.contains("sheet-full")) setSheet("peek");
+      keepVisibleAboveSheet();
+    }
+  }
+}
+
+// ---- Phone layout: details as a bottom sheet, tools as a side drawer ----
+function setSheet(state) {
+  const b = document.body.classList;
+  b.remove("sheet-peek", "sheet-full");
+  if (state) { b.add("sheet-" + state); b.remove("show-left"); }
+  const t = $("#sheetToggle");
+  if (t) { t.textContent = state === "full" ? "⌄" : "⌃"; t.title = state === "full" ? "Collapse" : "Expand"; }
+  if (state === "full") $("#inspector").scrollTop = 0;
+}
+const sheetState = () => (document.body.classList.contains("sheet-full") ? "full" : document.body.classList.contains("sheet-peek") ? "peek" : null);
+
+// Pan so the selection isn't hidden under the peeking sheet.
+function keepVisibleAboveSheet() {
+  const o = selectedObj();
+  if (!o) return;
+  const pt = sel.k === "cable" ? pointAlong(cablePath(o), 0.5) : o;
+  const r = svg.getBoundingClientRect();
+  const peek = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--peek")) || 170;
+  const visibleBottom = r.bottom - peek - 24;
+  const sy = r.top + (pt.y - view.y) * view.s;
+  const sx = r.left + (pt.x - view.x) * view.s;
+  if (sy > visibleBottom || sy < r.top + 40 || sx < r.left + 20 || sx > r.right - 20) {
+    view.x = pt.x - r.width / view.s / 2;
+    view.y = pt.y - (visibleBottom - r.top) / view.s / 2 - 20 / view.s;
+    renderCanvas();
+  }
 }
 const isNarrow = () => window.matchMedia("(max-width: 900px)").matches;
 
@@ -1758,6 +1792,40 @@ svg.addEventListener("wheel", e => {
   }
 }, { passive: false });
 
+// Bottom sheet: drag the bar up to expand, down to collapse/close; tap to toggle.
+// Tapping the peeking strip (outside a control) also expands it.
+(function sheetGestures() {
+  const bar = $("#sheetBar"), panel = $("#rightPanel");
+  let start = null;
+  bar.addEventListener("pointerdown", e => {
+    if (e.target.closest("button")) return;
+    start = { y: e.clientY, t: Date.now(), state: sheetState() };
+    bar.setPointerCapture(e.pointerId);
+    document.body.classList.add("sheet-dragging");
+  });
+  bar.addEventListener("pointermove", e => {
+    if (!start) return;
+    const dy = e.clientY - start.y;
+    const base = start.state === "full" ? 0 : panel.offsetHeight - (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--peek")) || 170);
+    panel.style.transform = `translateY(${Math.max(0, base + dy)}px)`;
+  });
+  const end = e => {
+    if (!start) return;
+    const dy = e.clientY - start.y;
+    document.body.classList.remove("sheet-dragging");
+    panel.style.transform = "";
+    if (Math.abs(dy) < 8) setSheet(start.state === "full" ? "peek" : "full");
+    else if (dy < -40) setSheet("full");
+    else if (dy > 40) setSheet(start.state === "full" ? "peek" : null);
+    start = null;
+  };
+  bar.addEventListener("pointerup", end);
+  bar.addEventListener("pointercancel", end);
+  panel.addEventListener("click", e => {
+    if (sheetState() === "peek" && !e.target.closest("button, input, select, textarea, label, a, .sheet-bar")) setSheet("full");
+  });
+})();
+
 // Hovering a row in the cable list highlights that run on the plan.
 $("#leftBody").addEventListener("mouseover", e => {
   const id = e.target.closest("[data-hover]")?.dataset.hover || null;
@@ -1924,8 +1992,11 @@ const ACTIONS = {
   "left-tab": b => { leftTab = b.dataset.tab; renderLeft(); },
   "cable-view": b => { project.cableView = b.dataset.v; scheduleSave(); renderCanvas(); },
   "legend-toggle": () => { legendOpen = !legendOpen; renderLegend(); },
-  "toggle-left": () => { document.body.classList.toggle("show-left"); document.body.classList.remove("show-right"); },
-  "toggle-right": () => { document.body.classList.toggle("show-right"); document.body.classList.remove("show-left"); },
+  "toggle-left": () => { const open = !document.body.classList.contains("show-left"); setSheet(null); document.body.classList.toggle("show-left", open); },
+  "toggle-right": () => setSheet(sheetState() === "full" ? null : "full"),
+  "close-drawers": () => { document.body.classList.remove("show-left"); if (sheetState() === "full") setSheet(sel ? "peek" : null); },
+  "sheet-toggle": () => setSheet(sheetState() === "full" ? "peek" : "full"),
+  "sheet-close": () => setSheet(null),
   zoom: b => { const r = svg.getBoundingClientRect(); zoomAt(+b.dataset.z, r.left + r.width / 2, r.top + r.height / 2); },
   fit: fitView,
   "add-item": b => {
@@ -1958,7 +2029,7 @@ const ACTIONS = {
     setMode("cable");
     startCable(it, portOf(it, b.dataset.port));
     toast("Now click the device it goes to (click the floor on the way to add bends).");
-    if (isNarrow()) document.body.classList.remove("show-right");
+    if (isNarrow()) setSheet(null);
   },
   disconnect: b => mutate(() => { project.cables = project.cables.filter(c => c.id !== b.dataset.id); }),
   "clear-wp": () => { const c = selectedObj(); mutate(() => { c.points = []; }); },

@@ -124,6 +124,8 @@ input, select, textarea { font: inherit; color: var(--text); }
 .link:hover { text-decoration: underline; }
 
 .only-narrow { display: none; }
+.sheet-bar, .scrim { display: none; }
+:root { --peek: 170px; }
 
 /* ---------- Layout ---------- */
 
@@ -676,8 +678,52 @@ table .cell.wide { width: 100%; min-width: 180px; }
     transition: transform 0.2s;
   }
   .panel.left { left: 0; transform: translateX(-105%); }
-  .panel.right { right: 0; transform: translateX(105%); }
-  body.show-left .panel.left, body.show-right .panel.right { transform: none; }
+  body.show-left .panel.left { transform: none; }
+  .drawer-close { margin-left: auto; align-self: center; }
+
+  /* Details become a bottom sheet: a short "peek" strip, or expanded. */
+  .panel.right {
+    left: 0;
+    right: 0;
+    top: auto;
+    width: auto;
+    height: 80%;
+    border-left: none;
+    border-top: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    transform: translateY(105%);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  body.sheet-peek .panel.right { transform: translateY(calc(100% - var(--peek))); }
+  body.sheet-full .panel.right { transform: none; }
+  body.sheet-peek #inspector { overflow: hidden; }
+  body.sheet-dragging .panel.right { transition: none; }
+  .sheet-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 8px 12px 0;
+    position: relative;
+    touch-action: none;
+    cursor: grab;
+    min-height: 36px;
+  }
+  .sheet-bar .grab {
+    position: absolute;
+    left: 50%;
+    top: 8px;
+    transform: translateX(-50%);
+    width: 44px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--line);
+  }
+  body.sheet-peek .zoom-ctrls { bottom: calc(var(--peek) + 12px); }
+  body.sheet-peek .toast, body.sheet-full .toast { bottom: calc(var(--peek) + 16px); }
+
+  .scrim { position: absolute; inset: 0; z-index: 15; background: #0008; display: none; }
+  body.show-left .scrim, body.sheet-full .scrim { display: block; }
   .mode-btn { padding: 6px 8px; font-size: 12px; }
   .top-actions .btn { padding: 6px 8px; font-size: 12px; }
 }
