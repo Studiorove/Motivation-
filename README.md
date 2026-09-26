@@ -25,7 +25,3 @@ Then visit `http://localhost:8000`. On your phone, open it in the browser and us
 ## Deploying for free
 
 Push this repo to GitHub and enable GitHub Pages (Settings → Pages → deploy from `main`) — it's static files, so no build step needed.
-
----
-
-This repo also hosts **[Streamplot](rigplan/)**, a separate livestream venue/cable/power/crew planner. See `rigplan/README.md`.
