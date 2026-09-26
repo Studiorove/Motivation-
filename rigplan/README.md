@@ -1,4 +1,4 @@
-# Rig Plan
+# Streamplot
 
 Plan livestream shows: venue layout, kit, cable runs, power and crew. It's all in one diagram, and the paperwork is generated from it.
 

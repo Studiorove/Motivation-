@@ -28,4 +28,4 @@ Push this repo to GitHub and enable GitHub Pages (Settings → Pages → deploy 
 
 ---
 
-This repo also hosts **[Rig Plan](rigplan/)**, a separate livestream venue/cable/power/crew planner. See `rigplan/README.md`.
+This repo also hosts **[Streamplot](rigplan/)**, a separate livestream venue/cable/power/crew planner. See `rigplan/README.md`.

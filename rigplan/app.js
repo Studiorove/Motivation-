@@ -1,6 +1,6 @@
 "use strict";
 
-// Rig Plan - venue diagrams, cable runs, power and crew for livestream shows.
+// Streamplot - venue diagrams, cable runs, power and crew for livestream shows.
 // Everything is stored in localStorage; world units are metres throughout.
 
 // ---------- Utilities ---------------------------------------------------------
@@ -16,7 +16,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // Set by hosts that sandbox the page (no print dialog, no file downloads).
-const EMBED = !!window.RIGPLAN_EMBED;
+const EMBED = !!window.STREAMPLOT_EMBED;
 
 const LEAD_M = 1.8;        // reach of a typical device power lead
 const PARALLEL_GAP = 0.14; // visual spacing between cables that share both ends
@@ -69,9 +69,20 @@ function setPath(obj, path, val) {
 
 // ---------- Storage -------------------------------------------------------------
 
-const KEY_INDEX = "rigplan:index";
-const KEY_LAST = "rigplan:last";
-const keyProject = id => "rigplan:p:" + id;
+const KEY_INDEX = "streamplot:index";
+const KEY_LAST = "streamplot:last";
+const keyProject = id => "streamplot:p:" + id;
+
+// The app was called Rig Plan; carry saved plans and settings over once.
+function migrateStorage() {
+  try {
+    if (localStorage.getItem(KEY_INDEX) || !localStorage.getItem("rigplan:index")) return;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k.startsWith("rigplan:")) localStorage.setItem("streamplot:" + k.slice(8), localStorage.getItem(k));
+    }
+  } catch (e) {}
+}
 
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
@@ -2178,7 +2189,7 @@ const ACTIONS = {
   company: openCompany,
   "logo-upload": () => $("#logoFile").click(),
   "logo-clear": () => { company.logo = null; saveCompany(); rerenderModal(); },
-  "company-export": () => downloadFile("rigplan-company.json", JSON.stringify(company, null, 1), "application/json"),
+  "company-export": () => downloadFile("streamplot-company.json", JSON.stringify(company, null, 1), "application/json"),
   "company-import": () => $("#companyFile").click(),
   "toggle-lock": () => {
     mutate(() => { if (project.quote.locked) { project.quote.locked = false; project.quote.snapshot = null; } else lockPrices(); });
@@ -2227,7 +2238,7 @@ const ACTIONS = {
     openProjects();
   },
   "dup-project": () => { const p = migrate(JSON.parse(JSON.stringify(project))); p.id = uid(); p.name += " (copy)"; switchTo(p); closeModal(); },
-  export: () => downloadFile(`${slug(project.name)}.rigplan.json`, JSON.stringify(project, null, 1), "application/json"),
+  export: () => downloadFile(`${slug(project.name)}.streamplot.json`, JSON.stringify(project, null, 1), "application/json"),
   import: () => $("#importFile").click(),
   example: () => { switchTo(buildExample()); closeModal(); toast("Example loaded - open Reports to see the cable, power and crew sheets."); },
   "bg-upload": () => $("#bgFile").click(),
@@ -2257,7 +2268,7 @@ $("#importFile").addEventListener("change", async e => {
     closeModal();
     toast(`Imported "${p.name}"`);
   } catch (err) {
-    toast("That file isn't a Rig Plan export.");
+    toast("That file isn't a Streamplot export.");
   }
 });
 
@@ -2293,7 +2304,7 @@ $("#companyFile").addEventListener("change", async e => {
     renderAll();
     toast("Company settings imported.");
   } catch (err) {
-    toast("That file isn't a Rig Plan company settings export.");
+    toast("That file isn't a Streamplot company settings export.");
   }
 });
 
@@ -2477,6 +2488,7 @@ function buildExample() {
 // ---------- Boot ---------------------------------------------------------------------------------------
 
 (function boot() {
+  migrateStorage();
   loadCompany();
   const last = lsGet(KEY_LAST);
   project = (last && loadProject(last)) || null;

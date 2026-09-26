@@ -4,7 +4,7 @@
 // per-plan quote (hire days, crew hours, extras, discount). A plan can lock a copy
 // of the rate card so an old quote doesn't change when rates are updated later.
 
-const KEY_COMPANY = "rigplan:company";
+const KEY_COMPANY = "streamplot:company";
 let company = null;
 
 function defaultCompany() {
