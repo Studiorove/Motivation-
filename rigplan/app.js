@@ -142,7 +142,8 @@ function migrateFields(p) {
     shapes: p.shapes || [],
     items: p.items || [],
     cables: p.cables || [],
-    crew: (p.crew || []).map(c => ({ name: "", role: "", contact: "", callTime: "", hours: null, rate: null, ...c })),
+    crew: (p.crew || []).map(migratePerson),
+    callsheet: migrateCallsheet(p.callsheet),
     bg: p.bg || null,
     meta: { client: "", venue: "", date: "", ref: "", ...(p.meta || {}) },
     quote: { hireDays: 1, crewDays: 1, hoursPerDay: 10, discountPct: 0, includeCables: true, extras: [], locked: false, snapshot: null, ...(p.quote || {}) },
@@ -152,19 +153,41 @@ function migrateFields(p) {
   };
 }
 
+function migratePerson(c) {
+  const p = { name: "", role: "", contact: "", email: "", radio: "", callTime: "", hours: null, rate: null, ...c };
+  // Older plans kept radio channels in the phone field.
+  if (!p.radio && /^ch\b/i.test(p.contact.trim())) { p.radio = p.contact; p.contact = ""; }
+  return p;
+}
+
+function migrateCallsheet(c = {}) {
+  const place = v => ({ name: "", address: "", phone: "", ...(v || {}) });
+  return {
+    showTime: "", showLen: 90, doorsBefore: 30, rehearsal: 45, buffer: 30, setupOverride: null, getoutOverride: null,
+    address: "", pin: "", venueContact: "", venuePhone: "", access: "", parking: "", clientContact: "", clientPhone: "",
+    wifi: "", catering: "", firstAider: "", firstAidKit: "", assembly: "", notes: "",
+    ...c,
+    hospital: place(c.hospital), doctor: place(c.doctor), chemist: place(c.chemist), police: place(c.police)
+  };
+}
+
 // What goes in the PDF. "client" is a branded proposal, "production" the crew pack.
 const EXPORT_PRESETS = {
   client: {
     preset: "client", diagram: true, lightDiagram: true, kit: true, crew: true, crewNames: false, cameras: false,
-    flow: false, network: false, cables: false, pull: false, power: false, checks: false, risk: false, costs: "itemised", terms: true
+    flow: false, network: false, cables: false, pull: false, power: false, checks: false, risk: false, callsheet: false, costs: "itemised", terms: true
   },
   production: {
     preset: "production", diagram: true, lightDiagram: true, kit: true, crew: true, crewNames: true, cameras: true,
-    flow: true, network: true, cables: true, pull: true, power: true, checks: true, risk: true, costs: "none", terms: false
+    flow: true, network: true, cables: true, pull: true, power: true, checks: true, risk: true, callsheet: true, costs: "none", terms: false
+  },
+  callsheet: {
+    preset: "callsheet", diagram: true, lightDiagram: true, kit: false, crew: false, crewNames: true, cameras: true,
+    flow: false, network: false, cables: false, pull: false, power: false, checks: false, risk: false, callsheet: true, costs: "none", terms: false
   },
   risk: {
     preset: "risk", diagram: true, lightDiagram: true, kit: false, crew: true, crewNames: true, cameras: false,
-    flow: false, network: false, cables: false, pull: false, power: true, checks: true, risk: true, costs: "none", terms: false
+    flow: false, network: false, cables: false, pull: false, power: true, checks: true, risk: true, callsheet: false, costs: "none", terms: false
   }
 };
 
@@ -1186,7 +1209,8 @@ function renderCrewTab() {
     const free = P.items.filter(it => !it.operatorId);
     h += `<div class="person" data-scope="person" data-pid="${p.id}">
       <div class="row2">${fText("Name", "name", p.name, "Name")}${fSel("Role", "role", p.role, [["", "- role -"], ...ROLES.map(r => [r, r])])}</div>
-      <div class="row2">${fText("Phone / radio", "contact", p.contact, "optional")}${fText("Call time", "callTime", p.callTime, "e.g. 07:30")}</div>
+      <div class="row2">${fText("Phone", "contact", p.contact, "optional")}${fText("Email", "email", p.email, "optional")}</div>
+      <div class="row2">${fText("Radio channel", "radio", p.radio, "e.g. Ch 1")}${fText("Call time", "callTime", p.callTime, "blank = crew call")}</div>
       <div class="posts">${posts.map(it => `<span class="post"><button class="link" data-act="goto" data-k="item" data-id="${it.id}">${esc(it.label)}</button><button class="x" data-act="unassign" data-id="${it.id}" title="Unassign">✕</button></span>`).join("")}
         ${free.length ? `<select class="assign" data-act-change="assign" data-pid="${p.id}"><option value="">+ Assign…</option>${free.map(it => `<option value="${it.id}">${esc(it.label)}${def(it).role ? " · " + esc(def(it).role) : ""}</option>`).join("")}</select>` : ""}
       </div>
@@ -1272,7 +1296,7 @@ function reportData() {
   const crew = P.crew.map(p => {
     const posts = P.items.filter(it => it.operatorId === p.id);
     return {
-      Name: p.name || "Unnamed", Role: p.role || "", Contact: p.contact || "", "Call time": p.callTime || "",
+      Name: p.name || "Unnamed", Role: p.role || "", Phone: p.contact || "", Radio: p.radio || "", "Call time": p.callTime || "",
       Positions: posts.map(it => `${it.label}${locate(it) ? " @ " + locate(it) : ""}`).join(", ")
     };
   });
@@ -1299,7 +1323,7 @@ function table(rows, cols) {
 }
 
 const REPORT_TABS = [
-  ["checks", "Checks"], ["risk", "Risk assessment"], ["costing", "Costing"], ["flow", "Signal flow"], ["network", "Stream & network"],
+  ["checks", "Checks"], ["callsheet", "Call sheet"], ["risk", "Risk assessment"], ["costing", "Costing"], ["flow", "Signal flow"], ["network", "Stream & network"],
   ["cables", "Cable schedule"], ["pull", "Pull sheet"], ["power", "Power"], ["cameras", "Camera shots"],
   ["kit", "Kit list"], ["crew", "Crew sheet"]
 ];
@@ -1310,6 +1334,7 @@ function reportBody(tab, R) {
   }
   if (tab === "costing") return renderCostingReport();
   if (tab === "risk") return renderRiskReport();
+  if (tab === "callsheet") return renderCallSheet();
   if (tab === "flow") return renderFlowReport();
   if (tab === "network") return renderNetReport();
   if (tab === "cables") return table(R.cables) + csvBtn("cables");
@@ -1348,7 +1373,8 @@ function downloadCSV(key) {
   const rows = {
     cables: R.cables, pull: R.pullRows, circuits: [...R.circuits, ...R.strips], kit: R.kit, positions: R.positions,
     crew: R.crew, cameras: R.cameras, streams: N?.outputs, ports: N?.ports, quote: key === "quote" ? quoteCSVRows() : null,
-    risk: key === "risk" ? riskCSVRows() : null
+    risk: key === "risk" ? riskCSVRows() : null,
+    callsheet: key === "callsheet" ? callSheetCSVRows() : null
   }[key] || [];
   if (!rows.length) return toast("Nothing to export");
   const cols = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(k => !k.startsWith("_"));
@@ -1379,6 +1405,7 @@ function renderExport() {
     <div class="preset-row">
       <button class="btn${o.preset === "client" ? " on" : ""}" data-act="export-preset" data-p="client">Client proposal</button>
       <button class="btn${o.preset === "production" ? " on" : ""}" data-act="export-preset" data-p="production">Production pack</button>
+      <button class="btn${o.preset === "callsheet" ? " on" : ""}" data-act="export-preset" data-p="callsheet">Call sheet</button>
       <button class="btn${o.preset === "risk" ? " on" : ""}" data-act="export-preset" data-p="risk">Risk assessment</button>
       ${o.preset === "custom" ? `<span class="muted small">Custom selection</span>` : ""}
     </div>
@@ -1388,7 +1415,7 @@ function renderExport() {
     </div>
     <div data-scope="export"><h4>Include</h4>
       <div class="check-grid">
-        ${chk("diagram", "Venue diagram")}${chk("lightDiagram", "Light diagram (prints cleaner)")}
+        ${chk("callsheet", "Call sheet (schedule, venue, emergency, contacts)")}${chk("diagram", "Venue diagram")}${chk("lightDiagram", "Light diagram (prints cleaner)")}
         ${chk("kit", "Kit list")}${chk("crew", "Crew")}${chk("crewNames", "Crew names &amp; contacts")}
         ${chk("cameras", "Camera shots")}${chk("flow", "Signal flow")}${chk("network", "Stream &amp; network")}
         ${chk("cables", "Cable schedule")}${chk("pull", "Pull sheet")}${chk("power", "Power")}
@@ -1417,7 +1444,7 @@ function printPlan() {
     return `<span class="lg"><i class="k-${baseType(k)}" style="background:${i.color}"></i>${esc(i.name)}</span>`;
   }).join("");
 
-  const title = o.costs !== "none" ? "Proposal" : o.preset === "risk" ? "Risk assessment" : "Production pack";
+  const title = o.costs !== "none" ? "Proposal" : o.preset === "risk" ? "Risk assessment" : o.preset === "callsheet" ? "Call sheet" : "Production pack";
   const crewRows = o.crewNames ? R.crew : Object.entries(project.crew.reduce((acc, p) => {
     const r = p.role || "Crew";
     acc[r] = (acc[r] || 0) + 1;
@@ -1436,6 +1463,7 @@ function printPlan() {
     </header>
     <h1>${esc(project.name)}</h1>
     <p class="doc-meta">${[m.client && `Client: ${esc(m.client)}`, m.venue && `Venue: ${esc(m.venue)}`, m.date && `Date: ${esc(m.date)}`].filter(Boolean).join(" · ")}</p>
+    ${sec(o.callsheet, "Call sheet", callSheetPrintHtml())}
     ${o.diagram ? `${diagram}<div class="legend">${legend}</div>` : ""}
     ${sec(o.costs !== "none", "Costs", quotePrintHtml(o.costs))}
     ${sec(o.kit, "Equipment", table(kitRows))}
@@ -1954,6 +1982,7 @@ function inputTarget(el) {
   if (scope?.dataset.scope === "quote") return project.quote;
   if (scope?.dataset.scope === "export") return project.exportOpts;
   if (scope?.dataset.scope === "riskhead") return project.risk;
+  if (scope?.dataset.scope === "callsheet") return project.callsheet;
   if (scope?.dataset.scope === "risk") return riskTarget(scope.dataset.rid);
   if (scope?.dataset.scope === "extra") return project.quote.extras.find(x => x.id === scope.dataset.eid);
   return selectedObj();
@@ -2020,6 +2049,14 @@ document.addEventListener("change", e => {
     if (!el.value) return;
     const it = itemById(el.value);
     mutate(() => { it.operatorId = el.dataset.pid; });
+    return;
+  }
+  if (el.dataset?.actChange === "currency") {
+    const code = el.value;
+    setCurrency(code);
+    rerenderModal();
+    renderInspector();
+    if (code === "custom") toast("Type your currency symbol in Company & rates.");
     return;
   }
   if (el.id === "projName") { pushUndo(editBefore); return; }
@@ -2397,7 +2434,7 @@ function buildExample() {
 
   const people = [["Jamie", "Technical lead", "Ch 1 + 2"], ["Alex", "Director", "Ch 1"], ["Sam", "Vision mixer (TD)", "Ch 1"], ["Jordan", "Camera operator", "Ch 1"],
     ["Priya", "Camera operator", "Ch 1"], ["Chris", "Audio engineer", "Ch 2"], ["Morgan", "Graphics operator", "Ch 1"], ["Taylor", "Streaming / encoder", "Ch 2"]];
-  const ids = people.map(([name, role, contact]) => { const p = { id: uid(), name, role, contact }; P.crew.push(p); return p.id; });
+  const ids = people.map(([name, role, radio]) => { const p = migratePerson({ id: uid(), name, role, radio }); P.crew.push(p); return p.id; });
   com.operatorId = ids[0]; ptzc.operatorId = ids[1]; sw.operatorId = ids[2];
   cam1.operatorId = ids[3]; cam2.operatorId = ids[4];
   mix.operatorId = ids[5]; gfx.operatorId = ids[6]; enc.operatorId = ids[7];
@@ -2410,6 +2447,8 @@ function buildExample() {
   lan.props.upMbps = 20;
   rtr.props.upMbps = 15;
   P.meta = { client: "Example Events Ltd", venue: "Main hall", date: "", ref: "Q-0001" };
+  // Times only - venue and emergency details are left for real, checked information.
+  P.callsheet.showTime = "19:00";
   P.quote.extras = [
     { id: uid(), desc: "Van hire + fuel", qty: 1, unit: 120 },
     { id: uid(), desc: "Crew travel", qty: 8, unit: 15 }

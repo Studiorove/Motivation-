@@ -10,7 +10,7 @@ let company = null;
 function defaultCompany() {
   return {
     name: "", contact: "", color: "#6c6cff", logo: null, terms: "",
-    currency: "£", vatPct: 20, extraDayPct: 100,
+    currency: "£", currencyCode: "GBP", moneyStyle: "pre", taxLabel: "VAT", vatPct: 20, extraDayPct: 100,
     kitRates: {}, roleRates: {}, cableRates: {}
   };
 }
@@ -24,15 +24,53 @@ function saveCompany() {
   if (!lsSet(KEY_COMPANY, JSON.stringify(company))) toast("Couldn't save company settings - try a smaller logo.", 5000);
 }
 
-const RATE_FIELDS = ["currency", "vatPct", "extraDayPct", "kitRates", "roleRates", "cableRates"];
+const RATE_FIELDS = ["currency", "currencyCode", "moneyStyle", "taxLabel", "vatPct", "extraDayPct", "kitRates", "roleRates", "cableRates"];
 const rateCard = () => (project.quote.locked && project.quote.snapshot) || company;
 const kitRate = type => rateCard().kitRates?.[type] ?? CATALOG[type].rate ?? 0;
 const roleRate = role => rateCard().roleRates?.[role] ?? DEFAULT_ROLE_RATES[role] ?? 0;
 const cableBase = kind => kind.split(">")[0];
 const cableRate = kind => rateCard().cableRates?.[cableBase(kind)] ?? DEFAULT_CABLE_RATES[cableBase(kind)] ?? 0;
 
+// Currency is presentation only (prices aren't converted). "eu" style puts the
+// symbol after the number with a comma decimal: 1.234,56 €.
+const CURRENCIES = {
+  GBP: { name: "£ Pound (£1,234.56)", sym: "£", style: "pre" },
+  EUR: { name: "€ Euro (€1,234.56)", sym: "€", style: "pre" },
+  "EUR-eu": { name: "€ Euro (1.234,56 €)", sym: "€", style: "eu" },
+  USD: { name: "$ US dollar", sym: "$", style: "pre" },
+  CAD: { name: "C$ Canadian dollar", sym: "C$", style: "pre" },
+  AUD: { name: "A$ Australian dollar", sym: "A$", style: "pre" },
+  NZD: { name: "NZ$ New Zealand dollar", sym: "NZ$", style: "pre" },
+  CHF: { name: "CHF Swiss franc", sym: "CHF ", style: "pre" },
+  custom: { name: "Other (type a symbol)", sym: null, style: "pre" }
+};
+
 function money(n) {
-  return (rateCard().currency || "") + (n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const rc = rateCard();
+  const sym = rc.currency || "";
+  const num = Math.abs(n || 0);
+  const sign = (n || 0) < 0 ? "−" : "";
+  if (rc.moneyStyle === "eu") return sign + num.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + sym.trim();
+  return sign + sym + num.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+const taxLabel = () => company.taxLabel || "VAT"; // a label, so it follows the company even on locked quotes
+
+// Applies to the rate card and to a locked quote's saved copy - it only changes
+// how amounts are shown.
+function setCurrency(code, customSym) {
+  const c = CURRENCIES[code] || CURRENCIES.GBP;
+  for (const t of [company, project.quote.snapshot].filter(Boolean)) {
+    t.currencyCode = code;
+    t.currency = c.sym ?? (customSym ?? t.currency);
+    t.moneyStyle = c.style;
+  }
+  saveCompany();
+}
+
+function currencySelect() {
+  const code = rateCard().currencyCode || (Object.keys(CURRENCIES).find(k => CURRENCIES[k].sym === rateCard().currency) ?? "custom");
+  return `<label class="f"><span>Currency</span><select id="currencySel" data-act-change="currency">${Object.entries(CURRENCIES).map(([k, c]) =>
+    `<option value="${k}"${k === code ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>`;
 }
 
 // Day 1 at full rate, each extra day at extraDayPct of the rate.
@@ -111,6 +149,7 @@ function renderCostingReport() {
       ${fCheck("Charge for cables", "includeCables", q.includeCables)}
     </div>
     <div class="quote-actions">
+      <div class="cur-inline">${currencySelect()}</div>
       <button class="btn sm" data-act="company">Edit rate card &amp; branding</button>
       <button class="btn sm" data-act="toggle-lock">${q.locked ? "🔒 Prices locked - unlock" : "Lock prices for this plan"}</button>
       <span class="muted small">${q.locked ? "Uses the rates saved when you locked it." : `Uses the current rate card. Extra days charged at ${rateCard().extraDayPct ?? 100}%.`}</span>
@@ -144,7 +183,7 @@ function renderCostingReport() {
   h += `<div class="totals">
     <div><span>Subtotal</span><b>${money(Q.subtotal)}</b></div>
     ${Q.discount ? `<div><span>Discount (${q.discountPct}%)</span><b>−${money(Q.discount)}</b></div>` : ""}
-    <div><span>VAT (${Q.vatPct}%)</span><b>${money(Q.vat)}</b></div>
+    <div><span>${esc(taxLabel())} (${Q.vatPct}%)</span><b>${money(Q.vat)}</b></div>
     <div class="grand"><span>Total</span><b>${money(Q.total)}</b></div></div>`;
   return h + csvBtn("quote");
 }
@@ -155,7 +194,7 @@ function quoteCSVRows() {
   for (const s of Q.sections) for (const l of s.lines) rows.push({ Section: s.name, Item: l.desc, Qty: l.qty, Rate: r2(l.rate), Total: r2(l.total) });
   rows.push({ Section: "", Item: "Subtotal", Total: r2(Q.subtotal) });
   if (Q.discount) rows.push({ Section: "", Item: "Discount", Total: -r2(Q.discount) });
-  rows.push({ Section: "", Item: `VAT ${Q.vatPct}%`, Total: r2(Q.vat) });
+  rows.push({ Section: "", Item: `${taxLabel()} ${Q.vatPct}%`, Total: r2(Q.vat) });
   rows.push({ Section: "", Item: "Total", Total: r2(Q.total) });
   return rows;
 }
@@ -178,8 +217,8 @@ function quotePrintHtml(mode) {
   h += `<div class="totals">
     ${mode !== "total" ? `<div><span>Subtotal</span><b>${money(Q.subtotal)}</b></div>` : ""}
     ${Q.discount && mode !== "total" ? `<div><span>Discount (${q.discountPct}%)</span><b>−${money(Q.discount)}</b></div>` : ""}
-    ${mode !== "total" ? `<div><span>VAT (${Q.vatPct}%)</span><b>${money(Q.vat)}</b></div>` : ""}
-    <div class="grand"><span>Total${mode === "total" ? ` (incl. ${Q.vatPct}% VAT)` : ""}</span><b>${money(Q.total)}</b></div></div>`;
+    ${mode !== "total" ? `<div><span>${esc(taxLabel())} (${Q.vatPct}%)</span><b>${money(Q.vat)}</b></div>` : ""}
+    <div class="grand"><span>Total${mode === "total" ? ` (incl. ${Q.vatPct}% ${esc(taxLabel())})` : ""}</span><b>${money(Q.total)}</b></div></div>`;
   return h;
 }
 
@@ -201,7 +240,9 @@ function renderCompany() {
       ${fArea("Terms / notes on quotes", "terms", C.terms, "e.g. 50% deposit to confirm. Prices exclude venue power and internet.")}
     </section>
     <section><h4>Pricing defaults</h4>
-      <div class="row3">${fText("Currency symbol", "currency", C.currency)}${fNum("VAT / tax", "vatPct", C.vatPct, { unit: "%", step: 1, min: 0 })}${fNum("Extra days at", "extraDayPct", C.extraDayPct, { unit: "%", step: 5, min: 0 })}</div>
+      <div class="row2">${currencySelect()}${(C.currencyCode || "") === "custom" ? fText("Symbol", "currency", C.currency) : `<div></div>`}</div>
+      <div class="row3">${fText("Tax name", "taxLabel", C.taxLabel, "VAT")}${fNum("Tax rate", "vatPct", C.vatPct, { unit: "%", step: 1, min: 0 })}${fNum("Extra days at", "extraDayPct", C.extraDayPct, { unit: "%", step: 5, min: 0 })}</div>
+      <p class="muted small">Changing currency only changes the symbol and number format - it doesn't convert your rates.</p>
       <p class="muted small">"Extra days at 50%" means day 2 onwards costs half the day rate. 100% = every day full price.</p>
     </section>
     <section><h4>Crew rates per hour</h4><div class="rate-grid">

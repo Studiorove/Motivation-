@@ -289,10 +289,11 @@ const CATALOG = {
 
 // Mains regions: nominal voltage, per-plug/strip limit and a typical circuit breaker.
 const REGIONS = {
-  uk: { name: "UK (230V, 13A plugs)", volts: 230, stripA: 13, circuitA: 32 },
-  eu: { name: "EU (230V, 16A)",        volts: 230, stripA: 16, circuitA: 16 },
-  us: { name: "US (120V, 15A)",        volts: 120, stripA: 15, circuitA: 20 },
-  au: { name: "AU/NZ (230V, 10A)",     volts: 230, stripA: 10, circuitA: 16 }
+  uk: { name: "UK (230V, 13A plugs)",      volts: 230, stripA: 13, circuitA: 32, emergency: "999 or 112" },
+  ie: { name: "Ireland (230V, 13A plugs)", volts: 230, stripA: 13, circuitA: 32, emergency: "112 or 999" },
+  eu: { name: "EU (230V, 16A)",            volts: 230, stripA: 16, circuitA: 16, emergency: "112" },
+  us: { name: "US (120V, 15A)",            volts: 120, stripA: 15, circuitA: 20, emergency: "911" },
+  au: { name: "AU/NZ (230V, 10A)",         volts: 230, stripA: 10, circuitA: 16, emergency: "000 (AU) / 111 (NZ)" }
 };
 
 // Number ports per device so ids stay unique when a device has several groups of
