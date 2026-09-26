@@ -2447,6 +2447,9 @@ function buildExample() {
   // Tech lead in before the crew call to meet the venue; director arrives for checks.
   P.crew[0].callTime = "14:45";
   P.crew[1].callTime = "17:00";
+  // Tech lead in before the crew call to meet the venue; director arrives for checks.
+  P.crew[0].callTime = "14:45";
+  P.crew[1].callTime = "17:00";
   com.operatorId = ids[0]; ptzc.operatorId = ids[1]; sw.operatorId = ids[2];
   cam1.operatorId = ids[3]; cam2.operatorId = ids[4];
   mix.operatorId = ids[5]; gfx.operatorId = ids[6]; enc.operatorId = ids[7];
