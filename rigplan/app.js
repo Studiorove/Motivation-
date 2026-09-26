@@ -136,6 +136,7 @@ function migrateFields(p) {
     showFov: p.showFov ?? true,
     showCableLabels: p.showCableLabels ?? true,
     showGrid: p.showGrid ?? true,
+    showCallTimes: p.showCallTimes ?? true,
     cableView: ["focus", "all", "bundle"].includes(p.cableView) ? p.cableView : "focus",
     cableShow: { video: true, audio: true, data: true, power: true, ...(p.cableShow || {}) },
     circuits: p.circuits?.length ? p.circuits : [{ id: uid(), name: "Circuit A", amps: REGIONS[region].circuitA }],
@@ -768,7 +769,8 @@ function buildScene(s, opts = {}) {
   // Cables
   out.cables = buildCables(opts, fs, halo) + hazardMarkers(fs, halo, opts.print);
 
-  // Items
+  // Items (operator names carry their call time when the show time is set)
+  const crewCall = P.showCallTimes ? crewCallTime() : null;
   for (const it of P.items) {
     const d = def(it);
     const color = CAT[d.cat].color;
@@ -781,7 +783,7 @@ function buildScene(s, opts = {}) {
       <circle class="sel-ring" r="0.55"></circle>
       <g transform="rotate(${it.rot})">${body}</g>${warn}
       <text class="i-lbl" ${halo} y="${0.35 + fs * 0.9}" font-size="${fs}" text-anchor="middle">${esc(it.label)}${it.locked && isSel ? " 🔒" : ""}</text>
-      ${person ? `<text class="i-op" ${halo} y="${0.35 + fs * 1.9}" font-size="${fs * 0.8}" text-anchor="middle">${esc(person.name)}</text>` : ""}</g>`;
+      ${person ? `<text class="i-op" ${halo} y="${0.35 + fs * 1.9}" font-size="${fs * 0.8}" text-anchor="middle">${esc(person.name)}${P.showCallTimes && callTimeFor(person, crewCall) ? `<tspan class="i-call${person.callTime ? " own" : ""}"> · ${esc(callTimeFor(person, crewCall))}</tspan>` : ""}</text>` : ""}</g>`;
   }
 
   if (opts.print) return out;
@@ -990,6 +992,12 @@ function inspectItem(it) {
   h += `<h4>${d.role ? "Operator" : "Assigned to"}</h4>`;
   h += P.crew.length ? fSel(d.role ? `Needs: ${d.role}` : "Person", "operatorId", it.operatorId || "", crewOpts, "strOrNull")
     : `<p class="muted small">Add people in the Crew tab to assign them.</p>`;
+  const op = it.operatorId && personById(it.operatorId);
+  if (op) {
+    const cc = crewCallTime();
+    h += `<div data-scope="person" data-pid="${op.id}">${fText(`${esc(op.name || "Their")} call time`, "callTime", op.callTime, cc != null ? `crew call ${fmtTime(cc)}` : "e.g. 07:30")}</div>
+      <p class="muted small">Leave blank to use the crew call from the call sheet.</p>`;
+  }
 
   if (d.camera) {
     const ci = camInfo(it);
@@ -1176,6 +1184,7 @@ function renderVenueTab() {
     ${fCheck("Camera fields of view", "showFov", P.showFov)}
     ${fCheck("Cable labels", "showCableLabels", P.showCableLabels)}
     ${fCheck("Grid", "showGrid", P.showGrid)}
+    ${fCheck("Crew call times", "showCallTimes", P.showCallTimes)}
   </div>`;
 }
 
@@ -2435,6 +2444,9 @@ function buildExample() {
   const people = [["Jamie", "Technical lead", "Ch 1 + 2"], ["Alex", "Director", "Ch 1"], ["Sam", "Vision mixer (TD)", "Ch 1"], ["Jordan", "Camera operator", "Ch 1"],
     ["Priya", "Camera operator", "Ch 1"], ["Chris", "Audio engineer", "Ch 2"], ["Morgan", "Graphics operator", "Ch 1"], ["Taylor", "Streaming / encoder", "Ch 2"]];
   const ids = people.map(([name, role, radio]) => { const p = migratePerson({ id: uid(), name, role, radio }); P.crew.push(p); return p.id; });
+  // Tech lead in before the crew call to meet the venue; director arrives for checks.
+  P.crew[0].callTime = "14:45";
+  P.crew[1].callTime = "17:00";
   com.operatorId = ids[0]; ptzc.operatorId = ids[1]; sw.operatorId = ids[2];
   cam1.operatorId = ids[3]; cam2.operatorId = ids[4];
   mix.operatorId = ids[5]; gfx.operatorId = ids[6]; enc.operatorId = ids[7];

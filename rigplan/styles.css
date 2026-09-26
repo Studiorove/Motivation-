@@ -462,6 +462,8 @@ p { margin: 6px 0; line-height: 1.4; }
 .item.sel .sel-ring { stroke: var(--accent); stroke-width: 2px; fill: #6c6cff18; }
 .item.pending .sel-ring { stroke: var(--good); stroke-width: 2px; stroke-dasharray: 4 3; }
 .i-lbl { fill: var(--text); font-weight: 700; paint-order: stroke; stroke: #0b0b10; stroke-linejoin: round; pointer-events: none; }
+.i-call { fill: #a1a1b5; }
+.i-call.own { fill: #fbbf24; font-weight: 700; }
 .i-op { fill: #9ea0ff; paint-order: stroke; stroke: #0b0b10; stroke-linejoin: round; pointer-events: none; }
 .warn-dot { fill: var(--bad); stroke: #0b0b10 !important; }
 
@@ -839,6 +841,8 @@ table .cell.wide { width: 100%; min-width: 180px; }
 #printRoot .print-svg.light .sh-lbl, #printRoot .print-svg.light .sh-text { fill: #666; }
 #printRoot .print-svg.light .i-lbl { fill: #111; stroke: #fff; }
 #printRoot .print-svg.light .i-op { fill: #4b4bc8; stroke: #fff; }
+#printRoot .print-svg.light .i-call { fill: #555; }
+#printRoot .print-svg.light .i-call.own { fill: #b45309; }
 #printRoot .print-svg.light .c-lbl { stroke: #fff; }
 #printRoot .print-svg.light .fov { fill: #0284c710; stroke: #0284c7aa; }
 #printRoot .print-svg.light .fov-axis { stroke: #0284c755; }

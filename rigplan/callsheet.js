@@ -151,6 +151,19 @@ function renderCallSheet() {
   return h;
 }
 
+// Someone's call: their own time, or the general crew call from the schedule.
+function crewCallTime() {
+  const S = callSchedule();
+  return S.rows ? S.crewCall : null;
+}
+function callTimeFor(p, crewCall = crewCallTime()) {
+  if (p.callTime) {
+    const m = toMin(p.callTime);
+    return m == null ? p.callTime : fmtTime(m);
+  }
+  return crewCall == null ? "" : fmtTime(crewCall);
+}
+
 function callCrewRows(S = callSchedule()) {
   return project.crew.map(p => ({
     Name: p.name || "Unnamed", Role: p.role || "", Phone: p.contact || "", Email: p.email || "", Radio: p.radio || "",
