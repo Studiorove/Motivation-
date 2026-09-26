@@ -233,6 +233,12 @@ const CATALOG = {
     cat: "convert", name: "HDMI splitter 1→2", short: "SPL", watts: 5,
     ports: [...ports("hdmi", "in", 1, "HDMI In"), ...ports("hdmi", "out", 2, "HDMI Out")]
   },
+  ndi_encoder: {
+    cat: "convert", name: "HDMI → NDI|HX encoder (PoE)", short: "NDI",
+    ndi: { hx: 20, full: 20 }, poe: true, poeW: 6,
+    ports: [...ports("hdmi", "in", 1, "HDMI In"), ...ports("eth", "io", 1, "Ethernet (NDI)")],
+    note: "Puts an HDMI source on the network as NDI for vMix/OBS."
+  },
   hdmi_fibre: {
     cat: "convert", name: "HDMI over Cat6 extender (TX+RX)", short: "EXT", watts: 10,
     ports: [...ports("hdmi", "in", 1, "HDMI In"), ...ports("hdmi", "out", 1, "HDMI Out")],
@@ -299,3 +305,50 @@ for (const d of Object.values(CATALOG)) {
     p.id = `${k}_${n[k]}`;
   }
 }
+
+// ---- Livestream + costing metadata ----------------------------------------------
+// rate      default hire rate per day (in the company currency) - placeholders,
+//           every company sets its own in Company & rates.
+// encoder   can push a stream to the internet.
+// ndi       sends NDI on the network: Mbps for NDI|HX and full-bandwidth NDI (1080p60).
+// ndiRx     can take NDI sources in (vMix/OBS machines).
+// internet  an uplink to the internet; upMbps is the default upload speed.
+// poeW      power drawn over PoE; poeBudgetW is what a PoE switch can supply.
+// audioSrc  starts an audio chain (mics, laptops' audio).
+// phantom   needs 48V phantom power from whatever it plugs into.
+const EXTRA = {
+  cam_z190: { rate: 90 }, cam_xf405: { rate: 80 }, cam_fx6: { rate: 150 }, cam_a7: { rate: 60 },
+  cam_bmpcc6k: { rate: 60 }, cam_bmstudio: { rate: 100 }, cam_ptz: { rate: 70 },
+  cam_ptz_ndi: { rate: 70, ndi: { hx: 20, full: 125 }, poeW: 25 }, ptz_controller: { rate: 30 },
+  atem_mini_pro: { rate: 40, encoder: true }, atem_mini_extreme: { rate: 70, encoder: true },
+  atem_tvs_hd8: { rate: 150 }, vmix_pc: { rate: 150, encoder: true, ndiRx: true },
+  mixer_digital: { rate: 90 }, mixer_analog: { rate: 30 },
+  mic_wired: { rate: 8, audioSrc: true }, mic_lectern: { rate: 15, audioSrc: true, phantom: true },
+  wireless_rx: { rate: 35, audioSrc: true }, di_box: { rate: 5 }, speaker_pa: { rate: 40 }, headphones_amp: { rate: 10 },
+  gfx_laptop: { rate: 60, audioSrc: true }, slides_laptop: { rate: 40, audioSrc: true }, playback: { rate: 50 },
+  stream_pc: { rate: 60, encoder: true, ndiRx: true }, hw_encoder: { rate: 60, encoder: true },
+  router_bonding: { rate: 80, internet: { upMbps: 15, label: "Bonded cellular upload" } },
+  switch_poe: { rate: 20, poeBudgetW: 120 },
+  venue_network: { rate: 0, venueOwned: true, internet: { upMbps: 20, label: "Venue upload" } },
+  monitor_mv: { rate: 25 }, monitor_field: { rate: 25 }, tv_confidence: { rate: 40 }, projector: { rate: 80 },
+  conv_hdmi_sdi: { rate: 10 }, conv_sdi_hdmi: { rate: 10 }, sdi_da: { rate: 15 }, hdmi_splitter: { rate: 8 },
+  ndi_encoder: { rate: 25 }, hdmi_fibre: { rate: 25 },
+  com_base: { rate: 60 }, com_beltpack: { rate: 15 },
+  wall_socket: { rate: 0, venueOwned: true }, power_strip4: { rate: 3 }, power_strip6: { rate: 4 }, cable_reel: { rate: 5 },
+  distro_16a: { rate: 25 }, ups: { rate: 20 }
+};
+for (const [k, extra] of Object.entries(EXTRA)) Object.assign(CATALOG[k], extra);
+
+// Hire rate per cable per day, by type, and crew rates per hour by role.
+const DEFAULT_CABLE_RATES = { sdi: 3, hdmi: 2, xlr: 1.5, trs: 1, mini: 1, eth: 1, usb: 1, com: 2, power: 2 };
+const DEFAULT_ROLE_RATES = {
+  "Director": 45, "Producer": 40, "Technical lead": 40, "Vision mixer (TD)": 35, "Camera operator": 30,
+  "Audio engineer": 32, "Graphics operator": 30, "Streaming / encoder": 32, "Floor manager": 28, "Runner": 15
+};
+
+// Stream presets: video + audio kbps (typical platform guidance for H.264).
+const STREAM_PRESETS = [
+  ["720p30", 3000], ["720p60", 4500], ["1080p30", 6000], ["1080p60", 9000],
+  ["1440p60", 15000], ["2160p30", 20000], ["2160p60", 35000]
+];
+const STREAM_AUDIO_KBPS = 160;

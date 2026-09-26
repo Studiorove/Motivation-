@@ -104,6 +104,12 @@ function newProject(name = "Untitled show") {
 
 // Fills in anything missing, so older saves and imports keep working.
 function migrate(p) {
+  const out = migrateFields(p);
+  out.items = out.items.filter(it => CATALOG[it.type]);
+  out.items.forEach(ensureItemDefaults);
+  return out;
+}
+function migrateFields(p) {
   const region = REGIONS[p.region] ? p.region : "uk";
   return {
     v: 1,
@@ -123,11 +129,26 @@ function migrate(p) {
     shapes: p.shapes || [],
     items: p.items || [],
     cables: p.cables || [],
-    crew: p.crew || [],
+    crew: (p.crew || []).map(c => ({ name: "", role: "", contact: "", callTime: "", hours: null, rate: null, ...c })),
     bg: p.bg || null,
+    meta: { client: "", venue: "", date: "", ref: "", ...(p.meta || {}) },
+    quote: { hireDays: 1, crewDays: 1, hoursPerDay: 10, discountPct: 0, includeCables: true, extras: [], locked: false, snapshot: null, ...(p.quote || {}) },
+    exportOpts: { ...EXPORT_PRESETS.client, ...(p.exportOpts || {}) },
     updated: p.updated || Date.now()
   };
 }
+
+// What goes in the PDF. "client" is a branded proposal, "production" the crew pack.
+const EXPORT_PRESETS = {
+  client: {
+    preset: "client", diagram: true, lightDiagram: true, kit: true, crew: true, crewNames: false, cameras: false,
+    flow: false, network: false, cables: false, pull: false, power: false, checks: false, costs: "itemised", terms: true
+  },
+  production: {
+    preset: "production", diagram: true, lightDiagram: true, kit: true, crew: true, crewNames: true, cameras: true,
+    flow: true, network: true, cables: true, pull: true, power: true, checks: true, costs: "none", terms: false
+  }
+};
 
 const def = it => CATALOG[it.type];
 const itemById = id => project.items.find(i => i.id === id);
@@ -387,7 +408,7 @@ function analyse() {
   }
 
   // Per-item checks.
-  const hasEncoder = P.items.some(it => ["stream_pc", "hw_encoder", "atem_mini_pro", "atem_mini_extreme", "vmix_pc"].includes(it.type));
+  const hasEncoder = P.items.some(it => def(it).encoder);
   for (const it of P.items) {
     const d = def(it);
     const pw = itemPorts(it).find(p => p.type === "power" && p.dir === "in");
@@ -411,10 +432,6 @@ function analyse() {
       if (ci.frameW > 30) issue("info", `${it.label} is framing ${r1(ci.frameW)}m wide - check the aim/zoom.`, { k: "item", id: it.id });
     }
     if (d.role && !it.operatorId) issue("warn", `No one is assigned to ${it.label} (${d.role}).`, { k: "item", id: it.id });
-    if (["stream_pc", "hw_encoder"].includes(it.type)) {
-      const eth = itemPorts(it).find(p => p.type === "eth");
-      if (!cableAt(it.id, eth.id)) issue("warn", `${it.label} has no network connection - it can't stream.`, { k: "item", id: it.id });
-    }
   }
   if (P.items.length && !hasEncoder) issue("info", "Nothing in the plan can encode the stream - add a streaming laptop, encoder or an ATEM Mini Pro.", null);
 
@@ -425,6 +442,9 @@ function analyse() {
       issue("warn", `${person.name || "Unnamed"} is on ${posts.length} operated positions (${posts.map(i => i.label).join(", ")}).`, null);
     }
   }
+
+  analyseNetwork(A, issue);
+  analyseSignal(A, issue);
 
   const order = { error: 0, warn: 1, info: 2 };
   A.issues.sort((a, b) => order[a.level] - order[b.level]);
@@ -515,6 +535,7 @@ function addItem(type, x, y) {
     };
   }
   if (d.source && !d.distroA) it.circuitId = project.circuits[0].id;
+  ensureItemDefaults(it);
   mutate(() => project.items.push(it));
   select("item", it.id);
   return it;
@@ -848,9 +869,14 @@ function inspectPlan() {
   return `<div data-scope="project">
     <h3>Plan</h3>
     <p class="muted">${P.items.length} devices · ${P.cables.length} cables · ${P.crew.length} crew</p>
+    <div class="readout"><div><b>${money(computeQuote().total)}</b><button class="link small" data-act="reports" data-tab="costing">quote total →</button></div>
+      <div><b>${r1(A.net.encoders.reduce((t, e) => t + e.mbps, 0))}Mbps</b><button class="link small" data-act="reports" data-tab="network">stream upload →</button></div></div>
     ${top.length ? `<ul class="issues compact">${top.map(issueLi).join("")}</ul>
       ${A.issues.length > top.length ? `<button class="link" data-act="reports" data-tab="checks">All ${A.issues.length} checks →</button>` : ""}`
       : P.items.length ? `<p class="good-note">✓ No problems found.</p>` : ""}
+    <h4>Show details</h4>
+    <div class="row2">${fText("Client", "meta.client", P.meta.client)}${fText("Date(s)", "meta.date", P.meta.date)}</div>
+    <div class="row2">${fText("Venue", "meta.venue", P.meta.venue)}${fText("Job ref", "meta.ref", P.meta.ref)}</div>
     <h4>Cable allowances</h4>
     ${fNum("Slack", "slackPct", P.slackPct, { step: 1, min: 0, unit: "%" })}
     ${fNum("Rise/drop per end", "dropM", P.dropM, { step: 0.5, min: 0, unit: "m" })}
@@ -920,6 +946,7 @@ function inspectItem(it) {
     h += `<h4>Position</h4>`;
   }
   h += `<div class="row3">${fNum("X", "x", r2(it.x), { unit: "m" })}${fNum("Y", "y", r2(it.y), { unit: "m" })}${d.camera ? "" : fNum("Rotate", "rot", Math.round(it.rot), { unit: "°", step: 15 })}</div>`;
+  h += inspectStream(it);
 
   // Power
   if (d.watts > 0 || d.source || d.strip || d.poe) {
@@ -1028,6 +1055,7 @@ function updateDerived() {
     cab.innerHTML = `<div><b>${r1(i.measured)}m</b><span>routed on plan</span></div>
       <div><b>${r1(i.planned)}m</b><span>planned (slack${i.drops ? ` + ${i.drops} drop${i.drops > 1 ? "s" : ""}` : ""})</span></div>
       <div><b>${!i.needsCable ? "-" : i.stock ? i.stock + "m" : "custom"}</b><span>${!i.needsCable ? "device lead reaches" : "pull from stock"}</span></div>
+      ${i.kind === "eth" ? `<div><b>${Math.round(A.net.link[obj.id] || 0)}Mbps</b><span>network traffic (${Math.round(((A.net.link[obj.id] || 0) / LINK_MBPS) * 100)}% of 1Gb)</span></div>` : ""}
       ${i.note ? `<p class="st-${i.status}">${esc(i.note)}</p>` : ""}`;
   }
 }
@@ -1098,7 +1126,7 @@ function renderCrewTab() {
     const free = P.items.filter(it => !it.operatorId);
     h += `<div class="person" data-scope="person" data-pid="${p.id}">
       <div class="row2">${fText("Name", "name", p.name, "Name")}${fSel("Role", "role", p.role, [["", "- role -"], ...ROLES.map(r => [r, r])])}</div>
-      ${fText("Phone / radio channel", "contact", p.contact, "optional")}
+      <div class="row2">${fText("Phone / radio", "contact", p.contact, "optional")}${fText("Call time", "callTime", p.callTime, "e.g. 07:30")}</div>
       <div class="posts">${posts.map(it => `<span class="post"><button class="link" data-act="goto" data-k="item" data-id="${it.id}">${esc(it.label)}</button><button class="x" data-act="unassign" data-id="${it.id}" title="Unassign">✕</button></span>`).join("")}
         ${free.length ? `<select class="assign" data-act-change="assign" data-pid="${p.id}"><option value="">+ Assign…</option>${free.map(it => `<option value="${it.id}">${esc(it.label)}${def(it).role ? " · " + esc(def(it).role) : ""}</option>`).join("")}</select>` : ""}
       </div>
@@ -1181,7 +1209,7 @@ function reportData() {
   const crew = P.crew.map(p => {
     const posts = P.items.filter(it => it.operatorId === p.id);
     return {
-      Name: p.name || "Unnamed", Role: p.role || "", Contact: p.contact || "",
+      Name: p.name || "Unnamed", Role: p.role || "", Contact: p.contact || "", "Call time": p.callTime || "",
       Positions: posts.map(it => `${it.label}${locate(it) ? " @ " + locate(it) : ""}`).join(", ")
     };
   });
@@ -1208,14 +1236,18 @@ function table(rows, cols) {
 }
 
 const REPORT_TABS = [
-  ["checks", "Checks"], ["cables", "Cable schedule"], ["pull", "Pull sheet"],
-  ["power", "Power"], ["cameras", "Camera shots"], ["kit", "Kit list"], ["crew", "Crew sheet"]
+  ["checks", "Checks"], ["costing", "Costing"], ["flow", "Signal flow"], ["network", "Stream & network"],
+  ["cables", "Cable schedule"], ["pull", "Pull sheet"], ["power", "Power"], ["cameras", "Camera shots"],
+  ["kit", "Kit list"], ["crew", "Crew sheet"]
 ];
 
 function reportBody(tab, R) {
   if (tab === "checks") {
     return A.issues.length ? `<ul class="issues">${A.issues.map(issueLi).join("")}</ul>` : `<p class="good-note">✓ No problems found.</p>`;
   }
+  if (tab === "costing") return renderCostingReport();
+  if (tab === "flow") return renderFlowReport();
+  if (tab === "network") return renderNetReport();
   if (tab === "cables") return table(R.cables) + csvBtn("cables");
   if (tab === "pull") {
     return table(R.pullRows) + csvBtn("pull") +
@@ -1240,18 +1272,19 @@ const csvBtn = key => `<div class="tbl-actions"><button class="btn sm" data-act=
 
 function openReports(tab) {
   reportTab = tab || reportTab;
-  const R = reportData();
-  $("#modalTitle").textContent = "Reports";
-  $("#modalBody").innerHTML = `<nav class="tabs wide">${REPORT_TABS.map(([k, n]) =>
+  showModal("Reports", () => `<nav class="tabs wide">${REPORT_TABS.map(([k, n]) =>
     `<button class="tab${k === reportTab ? " on" : ""}" data-act="report-tab" data-tab="${k}">${n}${k === "checks" && A.issues.length ? ` (${A.issues.length})` : ""}</button>`).join("")}
-    <button class="btn sm push-right" data-act="print">Print / PDF</button></nav>
-    <div class="report">${reportBody(reportTab, R)}</div>`;
-  openModal();
+    <button class="btn sm push-right" data-act="export-pdf">PDF export…</button></nav>
+    <div class="report">${reportBody(reportTab, reportData())}</div>`);
 }
 
 function downloadCSV(key) {
   const R = reportData();
-  const rows = { cables: R.cables, pull: R.pullRows, circuits: [...R.circuits, ...R.strips], kit: R.kit, positions: R.positions, crew: R.crew, cameras: R.cameras }[key] || [];
+  const N = ["streams", "ports"].includes(key) ? netReportData() : null;
+  const rows = {
+    cables: R.cables, pull: R.pullRows, circuits: [...R.circuits, ...R.strips], kit: R.kit, positions: R.positions,
+    crew: R.crew, cameras: R.cameras, streams: N?.outputs, ports: N?.ports, quote: key === "quote" ? quoteCSVRows() : null
+  }[key] || [];
   if (!rows.length) return toast("Nothing to export");
   const cols = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(k => !k.startsWith("_"));
   const cell = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -1267,29 +1300,83 @@ function downloadFile(name, text, type) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function renderExport() {
+  const o = project.exportOpts, m = project.meta;
+  const chk = (k, label) => fCheck(label, k, o[k]);
+  return `<div class="export">
+    <div class="preset-row">
+      <button class="btn${o.preset === "client" ? " on" : ""}" data-act="export-preset" data-p="client">Client proposal</button>
+      <button class="btn${o.preset === "production" ? " on" : ""}" data-act="export-preset" data-p="production">Production pack</button>
+      ${o.preset === "custom" ? `<span class="muted small">Custom selection</span>` : ""}
+    </div>
+    <div data-scope="project"><h4>Show details</h4>
+      <div class="row2">${fText("Client", "meta.client", m.client)}${fText("Venue", "meta.venue", m.venue)}</div>
+      <div class="row2">${fText("Date(s)", "meta.date", m.date, "e.g. 14–15 March")}${fText("Quote / job ref", "meta.ref", m.ref)}</div>
+    </div>
+    <div data-scope="export"><h4>Include</h4>
+      <div class="check-grid">
+        ${chk("diagram", "Venue diagram")}${chk("lightDiagram", "Light diagram (prints cleaner)")}
+        ${chk("kit", "Kit list")}${chk("crew", "Crew")}${chk("crewNames", "Crew names &amp; contacts")}
+        ${chk("cameras", "Camera shots")}${chk("flow", "Signal flow")}${chk("network", "Stream &amp; network")}
+        ${chk("cables", "Cable schedule")}${chk("pull", "Pull sheet")}${chk("power", "Power")}
+        ${chk("checks", "Plan checks")}${chk("terms", "Terms (from company settings)")}
+      </div>
+      ${fSel("Costs", "costs", o.costs, [["itemised", "Itemised"], ["sections", "Section totals only"], ["total", "Grand total only"], ["none", "Don't show costs"]])}
+    </div>
+    ${company.name || company.logo ? "" : `<p class="note">Add your company name, logo and colour in <button class="link" data-act="company">Company &amp; rates</button> to brand the PDF.</p>`}
+    <div class="insp-actions"><button class="btn primary" data-act="do-print">Create PDF</button>
+      <span class="muted small">Opens the print dialog - choose "Save as PDF".</span></div>
+  </div>`;
+}
+
 function printPlan() {
+  const o = project.exportOpts, m = project.meta;
   const R = reportData();
   const { w, h } = project.venue;
   const pad = 1.5;
   const sc = buildScene(1000 / (w + pad * 2), { print: true });
   const bg = project.bg ? $("#L-bg").innerHTML : "";
-  const diagram = `<svg class="print-svg" viewBox="${-pad} ${-pad} ${w + pad * 2} ${h + pad * 2}" xmlns="http://www.w3.org/2000/svg">
+  const diagram = `<svg class="print-svg${o.lightDiagram ? " light" : ""}" viewBox="${-pad} ${-pad} ${w + pad * 2} ${h + pad * 2}" xmlns="http://www.w3.org/2000/svg">
     ${svg.querySelector("defs").outerHTML}<rect x="${-pad}" y="${-pad}" width="${w + pad * 2}" height="${h + pad * 2}" class="print-bg"></rect>
     <g>${bg}</g><g>${sc.grid}</g><g>${sc.shapes}</g><g>${sc.fov}</g><g>${sc.cables}</g><g>${sc.items}</g></svg>`;
   const legend = [...new Set(project.cables.map(c => A.cable[c.id].kind))].map(k => {
     const i = kindInfo(k);
     return `<span class="lg"><i style="background:${i.color}"></i>${esc(i.name)}</span>`;
   }).join("");
-  $("#printRoot").innerHTML = `<h1>${esc(project.name)}</h1>
-    <p class="muted">Rig plan · printed ${new Date().toLocaleDateString()} · ${project.items.length} devices · ${project.cables.length} cables · ${R.totalW}W</p>
-    ${diagram}<div class="legend">${legend}</div>
-    ${A.issues.length ? `<section><h2>Checks</h2><ul class="issues">${A.issues.map(issueLi).join("")}</ul></section>` : ""}
-    <section><h2>Crew sheet</h2>${table(R.crew)}</section>
-    <section><h2>Camera shots</h2>${table(R.cameras)}</section>
-    <section><h2>Pull sheet</h2>${table(R.pullRows)}</section>
-    <section><h2>Cable schedule</h2>${table(R.cables)}</section>
-    <section><h2>Power</h2>${table(R.circuits)}${table(R.strips)}</section>
-    <section><h2>Kit list</h2>${table(R.kit)}${table(R.positions)}</section>`;
+
+  const title = o.costs !== "none" ? "Proposal" : "Production pack";
+  const crewRows = o.crewNames ? R.crew : Object.entries(project.crew.reduce((acc, p) => {
+    const r = p.role || "Crew";
+    acc[r] = (acc[r] || 0) + 1;
+    return acc;
+  }, {})).map(([Role, n]) => ({ Role, People: n }));
+  // Clients don't need to see the venue's own sockets and network drop.
+  const kitRows = R.kit.filter(k => !Object.values(CATALOG).some(d => d.name === k.Equipment && d.venueOwned))
+    .map(({ Category, Equipment, Qty }) => ({ Category, Equipment, Qty }));
+  const sec = (on, name, body) => (on ? `<section><h2>${name}</h2>${body}</section>` : "");
+
+  $("#printRoot").innerHTML = `<div class="doc" style="--brand:${esc(company.color || "#6c6cff")}">
+    <header class="doc-head">
+      <div class="doc-brand">${company.logo ? `<img src="${company.logo}" alt="">` : ""}
+        <div>${company.name ? `<b>${esc(company.name)}</b>` : ""}${company.contact ? `<span>${esc(company.contact)}</span>` : ""}</div></div>
+      <div class="doc-title"><b>${title}</b>${m.ref ? `<span>Ref: ${esc(m.ref)}</span>` : ""}<span>${new Date().toLocaleDateString()}</span></div>
+    </header>
+    <h1>${esc(project.name)}</h1>
+    <p class="doc-meta">${[m.client && `Client: ${esc(m.client)}`, m.venue && `Venue: ${esc(m.venue)}`, m.date && `Date: ${esc(m.date)}`].filter(Boolean).join(" · ")}</p>
+    ${o.diagram ? `${diagram}<div class="legend">${legend}</div>` : ""}
+    ${sec(o.costs !== "none", "Costs", quotePrintHtml(o.costs))}
+    ${sec(o.kit, "Equipment", table(kitRows))}
+    ${sec(o.crew, "Crew", table(crewRows))}
+    ${sec(o.cameras, "Camera shots", table(R.cameras))}
+    ${sec(o.flow, "Signal flow", renderFlowReport())}
+    ${sec(o.network, "Stream &amp; network", renderNetReport())}
+    ${sec(o.pull, "Pull sheet", table(R.pullRows))}
+    ${sec(o.cables, "Cable schedule", table(R.cables))}
+    ${sec(o.power, "Power", table(R.circuits) + table(R.strips))}
+    ${sec(o.checks && A.issues.length, "Plan checks", `<ul class="issues">${A.issues.map(issueLi).join("")}</ul>`)}
+    ${sec(o.terms && company.terms, "Terms", `<p class="terms">${esc(company.terms)}</p>`)}
+    <footer class="doc-foot">${esc([company.name, company.contact].filter(Boolean).join(" · "))}</footer>
+  </div>`;
   document.body.classList.add("printing");
   window.print();
   setTimeout(() => document.body.classList.remove("printing"), 500);
@@ -1298,25 +1385,77 @@ function printPlan() {
 // ---------- Modal, popover, projects ----------------------------------------------------------------
 
 function openModal() { $("#modal").classList.remove("hidden"); }
-function closeModal() { $("#modal").classList.add("hidden"); }
+function closeModal() { $("#modal").classList.add("hidden"); modalView = null; }
+
+// Modal screens are functions returning HTML, so they can be re-rendered after an
+// edit (totals update) without losing the scroll position or the focused field.
+let modalView = null;
+function showModal(title, render) {
+  const keep = modalView && $("#modalTitle").textContent === title;
+  const scroll = keep ? $("#modalBody").scrollTop : 0;
+  $("#modalTitle").textContent = title;
+  modalView = render;
+  $("#modalBody").innerHTML = render();
+  $("#modalBody").scrollTop = scroll;
+  openModal();
+}
+// Re-render after focus has moved and any click in progress has landed, so tabbing
+// to the next field or clicking a button right after an edit still works.
+let pointerDown = false, modalRerenderQueued = false;
+document.addEventListener("pointerdown", () => { pointerDown = true; }, true);
+document.addEventListener("pointerup", () => {
+  pointerDown = false;
+  if (modalRerenderQueued) setTimeout(flushModalRerender, 0);
+}, true);
+function queueModalRerender() {
+  modalRerenderQueued = true;
+  if (!pointerDown) setTimeout(flushModalRerender, 0);
+}
+function flushModalRerender() {
+  if (!modalRerenderQueued) return;
+  modalRerenderQueued = false;
+  rerenderModal();
+}
+function rerenderModal() {
+  if (!modalView || $("#modal").classList.contains("hidden")) return;
+  const act = document.activeElement;
+  const scopeKey = el => { const sc = el.closest("[data-scope]"); return sc ? `${sc.dataset.scope}:${sc.dataset.pid || ""}:${sc.dataset.eid || ""}` : ""; };
+  const key = act?.dataset?.f && $("#modalBody").contains(act) ? [act.dataset.f, scopeKey(act)] : null;
+  const scroll = $("#modalBody").scrollTop;
+  $("#modalBody").innerHTML = modalView();
+  $("#modalBody").scrollTop = scroll;
+  if (key) {
+    const el = $$("#modalBody [data-f]").find(x => x.dataset.f === key[0] && scopeKey(x) === key[1]);
+    if (el) {
+      el.focus();
+      // Match native tab behaviour (select the contents) so the next keystroke
+      // replaces the value instead of landing in front of it.
+      if (el.select && el.type !== "checkbox") el.select();
+      editBefore = snapshot();
+    }
+  }
+}
+
+function openCompany() {
+  showModal("Company & rates", renderCompany);
+}
 
 function openProjects() {
   const list = listProjects();
-  $("#modalTitle").textContent = "Projects";
-  $("#modalBody").innerHTML = `<div class="proj-actions">
+  showModal("Projects", () => `<div class="proj-actions">
       <button class="btn" data-act="new-project">+ New plan</button>
       <button class="btn" data-act="example">Load example</button>
       <button class="btn" data-act="import">Import…</button>
       <button class="btn" data-act="export">Export this plan</button>
       <button class="btn" data-act="dup-project">Duplicate this plan</button>
+      <button class="btn" data-act="company">Company &amp; rates</button>
     </div>
     <p class="muted small">Plans save automatically in this browser. Export to share with the team or move to another device.</p>
     <ul class="proj-list">${list.map(p => `<li class="${p.id === project.id ? "on" : ""}">
       <button class="link" data-act="open-project" data-id="${p.id}">${esc(p.name)}</button>
       <span class="muted small">${new Date(p.updated).toLocaleString()}</span>
       ${p.id === project.id ? `<span class="muted small">open</span>` : `<button class="icon-btn sm" data-act="delete-project" data-id="${p.id}" title="Delete">✕</button>`}
-    </li>`).join("")}</ul>`;
-  openModal();
+    </li>`).join("")}</ul>`);
 }
 
 function switchTo(p) {
@@ -1656,6 +1795,10 @@ function inputTarget(el) {
   const scope = el.closest("[data-scope]");
   if (scope?.dataset.scope === "project") return project;
   if (scope?.dataset.scope === "person") return personById(scope.dataset.pid);
+  if (scope?.dataset.scope === "company") return company;
+  if (scope?.dataset.scope === "quote") return project.quote;
+  if (scope?.dataset.scope === "export") return project.exportOpts;
+  if (scope?.dataset.scope === "extra") return project.quote.extras.find(x => x.id === scope.dataset.eid);
   return selectedObj();
 }
 function parseInput(el) {
@@ -1693,7 +1836,10 @@ function applyInput(el) {
     target.props.focal = r1(ci.f);
   }
   if (path === "venue.w" || path === "venue.h") target.venue[path.slice(6)] = Math.max(2, target.venue[path.slice(6)]);
-  if (path.startsWith("bg.")) renderBg();
+  if (path.startsWith("bg.") && target === project) renderBg();
+  if (target === company) saveCompany();
+  if (target === project.exportOpts) project.exportOpts.preset = "custom";
+  networkInputHook(target, path);
   // Mirror the value into any twin control (e.g. focal slider + number box).
   $$(`[data-f="${path}"]`).forEach(o => { if (o !== el && o.type !== "checkbox" && inputTarget(o) === target) o.value = getPath(target, path) ?? ""; });
   return true;
@@ -1726,8 +1872,9 @@ document.addEventListener("change", e => {
   const structural = el.tagName === "SELECT" || el.type === "checkbox" || ["kind", "operatorId", "region"].includes(el.dataset.f);
   renderCanvas();
   if (structural || !$("#inspector").contains(el)) renderInspector();
-  if (structural && leftTab !== "kit") renderLeft();
+  if ((structural || $("#modal").contains(el)) && leftTab !== "kit") renderLeft();
   updateDerived();
+  if ($("#modal").contains(el)) queueModalRerender();
   scheduleSave();
 });
 
@@ -1799,9 +1946,32 @@ const ACTIONS = {
   }),
   unassign: b => mutate(() => { itemById(b.dataset.id).operatorId = null; }),
   reports: b => openReports(b.dataset.tab),
-  "report-tab": b => openReports(b.dataset.tab),
+  "report-tab": b => { openReports(b.dataset.tab); $("#modalBody").scrollTop = 0; },
   csv: b => downloadCSV(b.dataset.key),
-  print: () => { closeModal(); printPlan(); },
+  "export-pdf": () => showModal("PDF export", renderExport),
+  "export-preset": b => { project.exportOpts = { ...EXPORT_PRESETS[b.dataset.p] }; scheduleSave(); rerenderModal(); },
+  "do-print": () => { closeModal(); printPlan(); },
+  company: openCompany,
+  "logo-upload": () => $("#logoFile").click(),
+  "logo-clear": () => { company.logo = null; saveCompany(); rerenderModal(); },
+  "company-export": () => downloadFile("rigplan-company.json", JSON.stringify(company, null, 1), "application/json"),
+  "company-import": () => $("#companyFile").click(),
+  "toggle-lock": () => {
+    mutate(() => { if (project.quote.locked) { project.quote.locked = false; project.quote.snapshot = null; } else lockPrices(); });
+    rerenderModal();
+  },
+  "add-extra": () => {
+    mutate(() => project.quote.extras.push({ id: uid(), desc: "", qty: 1, unit: 0 }));
+    rerenderModal();
+    const descs = $$('#modalBody [data-scope="extra"] [data-f="desc"]');
+    descs[descs.length - 1]?.focus();
+  },
+  "del-extra": b => { mutate(() => { project.quote.extras = project.quote.extras.filter(x => x.id !== b.dataset.id); }); rerenderModal(); },
+  "add-output": () => {
+    const it = selectedObj();
+    mutate(() => it.props.outputs.push({ id: uid(), name: `Stream ${it.props.outputs.length + 1}`, preset: "1080p30", kbps: 6000 }));
+  },
+  "del-output": b => { const it = selectedObj(); mutate(() => it.props.outputs.splice(+b.dataset.i, 1)); },
   "close-modal": closeModal,
   projects: openProjects,
   "new-project": () => { const name = prompt("Name for the new plan:", "New show"); if (name == null) return; switchTo(newProject(name || "New show")); closeModal(); },
@@ -1845,6 +2015,42 @@ $("#importFile").addEventListener("change", async e => {
     toast(`Imported "${p.name}"`);
   } catch (err) {
     toast("That file isn't a Rig Plan export.");
+  }
+});
+
+$("#logoFile").addEventListener("change", e => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, 600 / Math.max(img.width, img.height));
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+    cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+    company.logo = cv.toDataURL("image/png"); // PNG keeps transparency
+    URL.revokeObjectURL(img.src);
+    saveCompany();
+    rerenderModal();
+  };
+  img.onerror = () => toast("Couldn't read that image - use PNG, JPG or SVG.");
+  img.src = URL.createObjectURL(file);
+});
+
+$("#companyFile").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (typeof data !== "object" || !data.kitRates) throw new Error("not company settings");
+    company = { ...defaultCompany(), ...data };
+    saveCompany();
+    rerenderModal();
+    renderAll();
+    toast("Company settings imported.");
+  } catch (err) {
+    toast("That file isn't a Rig Plan company settings export.");
   }
 });
 
@@ -1903,6 +2109,7 @@ function buildExample() {
     const it = { id: uid(), type, x, y, rot: 0, label: nextLabel(d.short), notes: "", operatorId: null, props: {}, ...extra };
     if (d.camera) it.props = { sensorW: d.camera.sensorW, focalMin: d.camera.focalMin, focalMax: d.camera.focalMax, focal: d.camera.focalMin * 2, range: 10, ...(extra.props || {}) };
     if (d.source && !d.distroA) it.circuitId = P.circuits[0].id;
+    ensureItemDefaults(it);
     P.items.push(it);
     return it;
   };
@@ -1997,6 +2204,18 @@ function buildExample() {
   mix.operatorId = ids[5]; gfx.operatorId = ids[6]; enc.operatorId = ids[7];
   bp1.operatorId = ids[3]; bp2.operatorId = ids[4];
 
+  enc.props.outputs = [
+    { id: uid(), name: "YouTube", preset: "1080p30", kbps: 6000 },
+    { id: uid(), name: "LinkedIn Live", preset: "720p30", kbps: 3000 }
+  ];
+  lan.props.upMbps = 20;
+  rtr.props.upMbps = 15;
+  P.meta = { client: "Example Events Ltd", venue: "Main hall", date: "", ref: "Q-0001" };
+  P.quote.extras = [
+    { id: uid(), desc: "Van hire + fuel", qty: 1, unit: 120 },
+    { id: uid(), desc: "Crew travel", qty: 8, unit: 15 }
+  ];
+
   const built = project;
   project = prev;
   return built;
@@ -2005,6 +2224,7 @@ function buildExample() {
 // ---------- Boot ---------------------------------------------------------------------------------------
 
 (function boot() {
+  loadCompany();
   const last = lsGet(KEY_LAST);
   project = (last && loadProject(last)) || null;
   if (!project) {

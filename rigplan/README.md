@@ -20,6 +20,12 @@ Then open `http://localhost:8000/rigplan/`. On GitHub Pages it's served at `/rig
 - **Power:** wall sockets, strips, reels, distros and UPSs. Load is tracked per strip, per plug and per circuit (UK/EU/US/AU mains). You get warnings for overloads, anything not plugged in, daisy-chained strips and PoE devices without a PoE switch.
 - **Cameras:** sensor + zoom range → horizontal FOV cone on the plan. Frame width at the subject distance, widest→tightest from that position, and one-click Close-up/Mid/Full framing that tells you when the lens can't get there.
 - **Crew:** people and roles, assigned to positions. Flags unstaffed positions and people double-booked.
-- **Reports:** checks, cable schedule, pull sheet (with spares), power, camera shots, kit list, crew sheet. Tables export as CSV, and **Print / PDF** gives one document with the diagram.
+- **Stream & network:** set outputs per encoder (YouTube 1080p30, LinkedIn 720p30…) and the venue's measured upload. It checks upload needed vs available with 1.5× headroom, splits upload across bonded links, and tracks traffic on every switch/router port (streams + NDI, against gigabit) plus PoE budgets per switch.
+- **Signal flow:** vision mixer input lists, audio desk input lists (with 48V phantom), and a chain for every camera, graphics machine and mic showing its route to the stream. It warns when a source never reaches anything that streams.
+- **Costing:** a company rate card (kit £/day, cables £/day, crew £/hour by role, VAT, reduced extra-day rate) plus a quote per plan: hire days, crew hours, per-person overrides, extra costs and discount. **Lock prices** freezes the rates on an old quote.
+- **Branded PDF:** company name, logo, colour, contact line and terms. **Client proposal** (diagram, equipment, crew roles, costs itemised / section totals / total only) or **Production pack** (everything, no prices). Sections can be toggled.
+- **Reports:** checks, costing, signal flow, stream & network, cable schedule, pull sheet (with spares), power, camera shots, kit list, crew sheet (with call times). Tables export as CSV.
 
-Equipment specs are approximate planning figures. Check the real kit before the show.
+Company settings (rate card and branding) are shared by every plan in the browser. Export them from **Company & rates** to give the team the same set.
+
+Equipment specs and default rates are approximate placeholders. Check the real kit before the show.
