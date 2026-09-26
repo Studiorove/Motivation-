@@ -70,6 +70,10 @@ function computeQuote() {
     }
     cables.sort((a, b) => a.desc.localeCompare(b.desc));
   }
+  // Ramps and matting are needed whether or not cables themselves are charged.
+  const safetyRate = k => rateCard().kitRates?.[k] ?? SAFETY_ITEMS[k].rate;
+  if (A.safety.ramps) cables.push({ desc: SAFETY_ITEMS.safety_ramp.name, qty: A.safety.ramps, rate: safetyRate("safety_ramp"), days: daysTxt, total: A.safety.ramps * safetyRate("safety_ramp") * f });
+  if (A.safety.matM) cables.push({ desc: "Cable matting (m)", qty: A.safety.matM, rate: safetyRate("safety_mat"), days: daysTxt, total: A.safety.matM * safetyRate("safety_mat") * f });
 
   const crew = P.crew.map(p => ({
     desc: `${p.name || "Unnamed"}${p.role ? " · " + p.role : ""}`, role: p.role || "Crew", qty: personHours(p), unit: "hrs",
@@ -80,7 +84,7 @@ function computeQuote() {
 
   const sections = [
     { id: "kit", name: "Equipment hire", lines: kit },
-    { id: "cables", name: "Cables", lines: cables },
+    { id: "cables", name: "Cables & safety", lines: cables },
     { id: "crew", name: "Crew", lines: crew },
     { id: "extras", name: "Other costs", lines: extras }
   ].map(s => ({ ...s, subtotal: s.lines.reduce((t, l) => t + l.total, 0) }));
@@ -120,7 +124,7 @@ function renderCostingReport() {
   const [kit, cables, crew, extras] = Q.sections;
   h += `<h4>Equipment hire</h4>` + lineTable(kit, ["Equipment", "Qty", "Rate/day", "Hire", "Total"], l =>
     `<tr><td>${esc(l.desc)}</td><td>${l.qty}</td><td>${money(l.rate)}</td><td>${l.days}</td><td class="num">${money(l.total)}</td></tr>`);
-  if (q.includeCables) h += `<h4>Cables</h4>` + lineTable(cables, ["Cable", "Qty (incl. spares)", "Rate/day", "Hire", "Total"], l =>
+  if (q.includeCables || cables.lines.length) h += `<h4>Cables &amp; safety</h4>` + lineTable(cables, ["Cable", "Qty (incl. spares)", "Rate/day", "Hire", "Total"], l =>
     `<tr><td>${esc(l.desc)}</td><td>${l.qty}</td><td>${money(l.rate)}</td><td>${l.days}</td><td class="num">${money(l.total)}</td></tr>`);
 
   h += `<h4>Crew</h4>` + (crew.lines.length ? lineTable(crew, ["Person", "Hours", `Rate/hr (${esc(cur)})`, "Total"], l =>
@@ -203,7 +207,8 @@ function renderCompany() {
     <section><h4>Crew rates per hour</h4><div class="rate-grid">
       ${ROLES.map(r => rateInput(r, `roleRates.${r}`, C.roleRates[r], DEFAULT_ROLE_RATES[r])).join("")}</div></section>
     <section><h4>Cable hire per day</h4><div class="rate-grid">
-      ${Object.entries(CABLE_TYPES).map(([k, t]) => rateInput(t.name, `cableRates.${k}`, C.cableRates[k], DEFAULT_CABLE_RATES[k])).join("")}</div></section>
+      ${Object.entries(CABLE_TYPES).map(([k, t]) => rateInput(t.name, `cableRates.${k}`, C.cableRates[k], DEFAULT_CABLE_RATES[k])).join("")}
+      ${Object.entries(SAFETY_ITEMS).map(([k, t]) => rateInput(t.name, `kitRates.${k}`, C.kitRates[k], t.rate)).join("")}</div></section>
     <section><h4>Equipment hire per day</h4>`;
   for (const cat of CATEGORIES) {
     h += `<p class="cat-h small"><span class="cat-dot" style="--c:${cat.color}"></span>${cat.name}</p><div class="rate-grid">`;
@@ -226,6 +231,7 @@ function lockPrices() {
   // Freeze the placeholders too, so later catalog changes can't move the quote.
   for (const [k, d] of Object.entries(CATALOG)) snap.kitRates[k] ??= d.rate ?? 0;
   for (const r of ROLES) snap.roleRates[r] ??= DEFAULT_ROLE_RATES[r] ?? 0;
+  for (const [k, t] of Object.entries(SAFETY_ITEMS)) snap.kitRates[k] ??= t.rate;
   for (const k of Object.keys(CABLE_TYPES)) snap.cableRates[k] ??= DEFAULT_CABLE_RATES[k] ?? 0;
   project.quote.snapshot = snap;
   project.quote.locked = true;

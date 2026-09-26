@@ -34,8 +34,16 @@ const SHAPE_KINDS = {
   pillar:  { name: "Pillar",       label: "",      w: 0.5, h: 0.5 },
   door:    { name: "Door",         label: "Door",  w: 1.2, h: 0.2 },
   zone:    { name: "Zone",         label: "Zone",  w: 5,   h: 3 },
+  fire_door: { name: "Fire door",    label: "Fire door", w: 1.4, h: 0.25 },
+  escape:  { name: "Escape route", label: "Escape route", w: 2, h: 6 },
+  walkway: { name: "Walkway / aisle", label: "Walkway", w: 1.5, h: 6 },
+  nocable: { name: "No-cable zone", label: "No cables", w: 3, h: 2 },
   label:   { name: "Text label",   label: "Label", w: 0,   h: 0 }
 };
+
+// Area shapes that are only picked up by their outline, so clicks inside them still
+// reach the floor (pan) and the kit on top.
+const EDGE_HIT = ["room", "zone", "escape", "walkway", "nocable"];
 
 function toast(msg, ms = 2800) {
   const t = $("#toast");
@@ -136,6 +144,7 @@ function migrateFields(p) {
     meta: { client: "", venue: "", date: "", ref: "", ...(p.meta || {}) },
     quote: { hireDays: 1, crewDays: 1, hoursPerDay: 10, discountPct: 0, includeCables: true, extras: [], locked: false, snapshot: null, ...(p.quote || {}) },
     exportOpts: { ...EXPORT_PRESETS.client, ...(p.exportOpts || {}) },
+    risk: { assessor: "", date: "", review: "", ...(p.risk || {}), overrides: { ...(p.risk?.overrides || {}) }, custom: p.risk?.custom || [] },
     updated: p.updated || Date.now()
   };
 }
@@ -144,11 +153,15 @@ function migrateFields(p) {
 const EXPORT_PRESETS = {
   client: {
     preset: "client", diagram: true, lightDiagram: true, kit: true, crew: true, crewNames: false, cameras: false,
-    flow: false, network: false, cables: false, pull: false, power: false, checks: false, costs: "itemised", terms: true
+    flow: false, network: false, cables: false, pull: false, power: false, checks: false, risk: false, costs: "itemised", terms: true
   },
   production: {
     preset: "production", diagram: true, lightDiagram: true, kit: true, crew: true, crewNames: true, cameras: true,
-    flow: true, network: true, cables: true, pull: true, power: true, checks: true, costs: "none", terms: false
+    flow: true, network: true, cables: true, pull: true, power: true, checks: true, risk: true, costs: "none", terms: false
+  },
+  risk: {
+    preset: "risk", diagram: true, lightDiagram: true, kit: false, crew: true, crewNames: true, cameras: false,
+    flow: false, network: false, cables: false, pull: false, power: true, checks: true, risk: true, costs: "none", terms: false
   }
 };
 
@@ -445,6 +458,7 @@ function analyse() {
     }
   }
 
+  analyseSafety(A, issue);
   analyseNetwork(A, issue);
   analyseSignal(A, issue);
 
@@ -546,7 +560,7 @@ function addItem(type, x, y) {
 
 function addShape(kind, x, y, w, h) {
   const k = SHAPE_KINDS[kind];
-  const sh = { id: uid(), kind, x, y, w: w ?? k.w, h: h ?? k.h, rot: 0, label: k.label, locked: false };
+  const sh = { id: uid(), kind, x, y, w: w ?? k.w, h: h ?? k.h, rot: 0, label: k.label, locked: false, treatment: "none" };
   if (kind === "round") sh.h = sh.w;
   mutate(() => project.shapes.push(sh));
   select("shape", sh.id);
@@ -664,12 +678,12 @@ function buildScene(s, opts = {}) {
       body = `<ellipse rx="${sh.w / 2}" ry="${sh.h / 2}"></ellipse>`;
     } else {
       body = `<rect x="${-sh.w / 2}" y="${-sh.h / 2}" width="${sh.w}" height="${sh.h}"></rect>`;
-      if (sh.kind === "room" || sh.kind === "zone") {
+      if (EDGE_HIT.includes(sh.kind)) {
         body += `<rect class="hit-edge" x="${-sh.w / 2}" y="${-sh.h / 2}" width="${sh.w}" height="${sh.h}"></rect>`;
       }
     }
     const lbl = sh.kind !== "label" && sh.label
-      ? sh.kind === "room" || sh.kind === "zone"
+      ? EDGE_HIT.includes(sh.kind)
         ? `<text class="sh-lbl corner" x="${sh.x - sh.w / 2 + fs * 0.4}" y="${sh.y - sh.h / 2 + fs * 1.1}" font-size="${fs}">${esc(sh.label)}</text>`
         : `<text class="sh-lbl" x="${sh.x}" y="${sh.y}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle">${esc(sh.label)}</text>`
       : "";
@@ -692,7 +706,7 @@ function buildScene(s, opts = {}) {
   }
 
   // Cables
-  out.cables = buildCables(opts, fs, halo);
+  out.cables = buildCables(opts, fs, halo) + hazardMarkers(fs, halo, opts.print);
 
   // Items
   for (const it of P.items) {
@@ -969,6 +983,7 @@ function inspectShape(sh) {
     h += `<div class="row3">${fNum("Centre X", "x", r2(sh.x), { unit: "m" })}${fNum("Centre Y", "y", r2(sh.y), { unit: "m" })}${fNum("Rotate", "rot", sh.rot, { unit: "°", step: 15 })}</div>`;
     h += fCheck("Lock position (stops accidental drags)", "locked", sh.locked);
     h += `<p class="muted small">Drag the square handle to resize.</p>`;
+    h += inspectHazard(sh);
   }
   h += `<div class="insp-actions"><button class="btn" data-act="duplicate">Duplicate</button><button class="btn danger" data-act="delete">Delete</button></div>`;
   return h;
@@ -1165,6 +1180,9 @@ function reportData() {
         pullRows.push({ Cable: name, Length: len, Qty: qty, Spare: spare, Total: qty + spare });
       });
   }
+  // Cable safety kit worked out from the hazard-zone crossings.
+  if (A.safety.ramps) pullRows.push({ Cable: SAFETY_ITEMS.safety_ramp.name, Length: "-", Qty: A.safety.ramps, Spare: 0, Total: A.safety.ramps });
+  if (A.safety.matM) pullRows.push({ Cable: "Cable matting", Length: "per metre", Qty: A.safety.matM, Spare: 0, Total: A.safety.matM });
   const adapters = {};
   for (const c of P.cables) if (A.cable[c.id].kind.includes(">")) adapters[A.cable[c.id].info.name] = true;
 
@@ -1226,7 +1244,7 @@ function table(rows, cols) {
 }
 
 const REPORT_TABS = [
-  ["checks", "Checks"], ["costing", "Costing"], ["flow", "Signal flow"], ["network", "Stream & network"],
+  ["checks", "Checks"], ["risk", "Risk assessment"], ["costing", "Costing"], ["flow", "Signal flow"], ["network", "Stream & network"],
   ["cables", "Cable schedule"], ["pull", "Pull sheet"], ["power", "Power"], ["cameras", "Camera shots"],
   ["kit", "Kit list"], ["crew", "Crew sheet"]
 ];
@@ -1236,6 +1254,7 @@ function reportBody(tab, R) {
     return A.issues.length ? `<ul class="issues">${A.issues.map(issueLi).join("")}</ul>` : `<p class="good-note">✓ No problems found.</p>`;
   }
   if (tab === "costing") return renderCostingReport();
+  if (tab === "risk") return renderRiskReport();
   if (tab === "flow") return renderFlowReport();
   if (tab === "network") return renderNetReport();
   if (tab === "cables") return table(R.cables) + csvBtn("cables");
@@ -1273,7 +1292,8 @@ function downloadCSV(key) {
   const N = ["streams", "ports"].includes(key) ? netReportData() : null;
   const rows = {
     cables: R.cables, pull: R.pullRows, circuits: [...R.circuits, ...R.strips], kit: R.kit, positions: R.positions,
-    crew: R.crew, cameras: R.cameras, streams: N?.outputs, ports: N?.ports, quote: key === "quote" ? quoteCSVRows() : null
+    crew: R.crew, cameras: R.cameras, streams: N?.outputs, ports: N?.ports, quote: key === "quote" ? quoteCSVRows() : null,
+    risk: key === "risk" ? riskCSVRows() : null
   }[key] || [];
   if (!rows.length) return toast("Nothing to export");
   const cols = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(k => !k.startsWith("_"));
@@ -1297,6 +1317,7 @@ function renderExport() {
     <div class="preset-row">
       <button class="btn${o.preset === "client" ? " on" : ""}" data-act="export-preset" data-p="client">Client proposal</button>
       <button class="btn${o.preset === "production" ? " on" : ""}" data-act="export-preset" data-p="production">Production pack</button>
+      <button class="btn${o.preset === "risk" ? " on" : ""}" data-act="export-preset" data-p="risk">Risk assessment</button>
       ${o.preset === "custom" ? `<span class="muted small">Custom selection</span>` : ""}
     </div>
     <div data-scope="project"><h4>Show details</h4>
@@ -1309,7 +1330,7 @@ function renderExport() {
         ${chk("kit", "Kit list")}${chk("crew", "Crew")}${chk("crewNames", "Crew names &amp; contacts")}
         ${chk("cameras", "Camera shots")}${chk("flow", "Signal flow")}${chk("network", "Stream &amp; network")}
         ${chk("cables", "Cable schedule")}${chk("pull", "Pull sheet")}${chk("power", "Power")}
-        ${chk("checks", "Plan checks")}${chk("terms", "Terms (from company settings)")}
+        ${chk("checks", "Plan checks")}${chk("risk", "Risk assessment")}${chk("terms", "Terms (from company settings)")}
       </div>
       ${fSel("Costs", "costs", o.costs, [["itemised", "Itemised"], ["sections", "Section totals only"], ["total", "Grand total only"], ["none", "Don't show costs"]])}
     </div>
@@ -1334,7 +1355,7 @@ function printPlan() {
     return `<span class="lg"><i class="k-${baseType(k)}" style="background:${i.color}"></i>${esc(i.name)}</span>`;
   }).join("");
 
-  const title = o.costs !== "none" ? "Proposal" : "Production pack";
+  const title = o.costs !== "none" ? "Proposal" : o.preset === "risk" ? "Risk assessment" : "Production pack";
   const crewRows = o.crewNames ? R.crew : Object.entries(project.crew.reduce((acc, p) => {
     const r = p.role || "Crew";
     acc[r] = (acc[r] || 0) + 1;
@@ -1363,6 +1384,7 @@ function printPlan() {
     ${sec(o.pull, "Pull sheet", table(R.pullRows))}
     ${sec(o.cables, "Cable schedule", table(R.cables))}
     ${sec(o.power, "Power", table(R.circuits) + table(R.strips))}
+    ${sec(o.risk, "Risk assessment", riskPrintHtml())}
     ${sec(o.checks && A.issues.length, "Plan checks", `<ul class="issues">${A.issues.map(issueLi).join("")}</ul>`)}
     ${sec(o.terms && company.terms, "Terms", `<p class="terms">${esc(company.terms)}</p>`)}
     <footer class="doc-foot">${esc([company.name, company.contact].filter(Boolean).join(" · "))}</footer>
@@ -1797,6 +1819,8 @@ function inputTarget(el) {
   if (scope?.dataset.scope === "company") return company;
   if (scope?.dataset.scope === "quote") return project.quote;
   if (scope?.dataset.scope === "export") return project.exportOpts;
+  if (scope?.dataset.scope === "riskhead") return project.risk;
+  if (scope?.dataset.scope === "risk") return riskTarget(scope.dataset.rid);
   if (scope?.dataset.scope === "extra") return project.quote.extras.find(x => x.id === scope.dataset.eid);
   return selectedObj();
 }
@@ -1840,7 +1864,8 @@ function applyInput(el) {
   if (target === project.exportOpts) project.exportOpts.preset = "custom";
   networkInputHook(target, path);
   // Mirror the value into any twin control (e.g. focal slider + number box).
-  $$(`[data-f="${path}"]`).forEach(o => { if (o !== el && o.type !== "checkbox" && inputTarget(o) === target) o.value = getPath(target, path) ?? ""; });
+  const scopeEl = el.closest("[data-scope]");
+  $$(`[data-f="${path}"]`).forEach(o => { if (o !== el && o.type !== "checkbox" && o.closest("[data-scope]") === scopeEl) o.value = getPath(target, path) ?? ""; });
   return true;
 }
 
@@ -1969,6 +1994,14 @@ const ACTIONS = {
     const descs = $$('#modalBody [data-scope="extra"] [data-f="desc"]');
     descs[descs.length - 1]?.focus();
   },
+  "add-risk": () => {
+    mutate(() => project.risk.custom.push({ id: uid(), hazard: "", who: "", controls: "", l: 3, s: 3, rl: 2, rs: 3, further: "", owner: "" }));
+    rerenderModal();
+    const t = $$('#modalBody .risk [data-f="hazard"]');
+    t[t.length - 1]?.focus();
+  },
+  "del-risk": b => { mutate(() => { project.risk.custom = project.risk.custom.filter(r => r.id !== b.dataset.id); }); rerenderModal(); },
+  "reset-risk": b => { mutate(() => { delete project.risk.overrides[b.dataset.id]; }); rerenderModal(); },
   "del-extra": b => { mutate(() => { project.quote.extras = project.quote.extras.filter(x => x.id !== b.dataset.id); }); rerenderModal(); },
   "add-output": () => {
     const it = selectedObj();
@@ -2094,7 +2127,7 @@ function buildExample() {
   project = newProject("Example: conference livestream");
   const P = project;
   P.venue = { w: 26, h: 19 };
-  const S = (kind, x, y, w, h, label) => { const s = { id: uid(), kind, x, y, w, h, rot: 0, label: label ?? SHAPE_KINDS[kind].label, locked: kind === "room" }; P.shapes.push(s); return s; };
+  const S = (kind, x, y, w, h, label) => { const s = { id: uid(), kind, x, y, w, h, rot: 0, label: label ?? SHAPE_KINDS[kind].label, locked: kind === "room", treatment: "none" }; P.shapes.push(s); return s; };
   S("room", 13, 9.5, 24, 17, "Main hall");
   S("stage", 13, 3, 10, 3, "Stage");
   S("seating", 8.5, 10, 7, 6, "Seating L");
@@ -2103,7 +2136,9 @@ function buildExample() {
   S("zone", 20.7, 16.1, 8.6, 3.2, "Production (FOH)");
   S("table", 20.7, 15.95, 8, 1.5, "Prod table");
   S("table", 16, 3.3, 0.7, 0.6, "Lectern");
-  S("door", 1, 13, 0.3, 2, "Doors");
+  S("fire_door", 1, 13, 0.3, 2, "Fire exit");
+  S("escape", 2.6, 13, 3, 2.4, "Escape route").treatment = "ramp";
+  S("walkway", 13, 10.25, 1.4, 5.5, "Centre aisle");
   S("pillar", 5, 14, 0.5, 0.5, "");
   S("label", 13, 17.5, 0, 0, "Fire exit - keep clear").size = 0.45;
 
